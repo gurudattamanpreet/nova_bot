@@ -87,6 +87,12 @@ RESPONSE STYLE:
 - Use simple, everyday language
 - Always use proper grammar with spaces between words and correct punctuation
 
+TICKET GENERATION RULES:
+- IMPORTANT: Whenever you mention creating a support ticket, opening a ticket, or that a ticket is in progress, you MUST include a ticket number in format: NVS##### (5 digits)
+- Example: "I've opened a support ticket for you. Ticket Number: NVS12345. The ticket is now in progress, and an expert will reach out shortly."
+- Always format as "Ticket Number: NVS#####" or "Ticket ID: NVS#####"
+- When mentioning ticket status, always include the ticket number
+
 SPECIAL INSTRUCTIONS:
 1. If the user asks for SEO analysis of a website, do not perform the analysis. Instead, guide them on how to do it in the Novarsis tool and offer to raise a ticket if they face issues.
 2. When explaining features, include details about the free, pro, and enterprise plans:
@@ -671,6 +677,51 @@ def remove_duplicate_questions(text: str) -> str:
     return text
 
 
+def generate_ticket_number() -> str:
+    """Generate a unique ticket number in format NVS#####"""
+    return f"NVS{random.randint(10000, 99999)}"
+
+
+def inject_ticket_numbers(response_text: str) -> str:
+    """Inject ticket numbers wherever tickets are mentioned in the response"""
+    # Patterns to look for ticket mentions
+    ticket_patterns = [
+        r"I've opened a support ticket",
+        r"I've created a.*?ticket",
+        r"support ticket.*?created",
+        r"ticket is now in progress",
+        r"raised a ticket",
+        r"creating a support ticket",
+        r"ticket has been created",
+        r"opened a ticket",
+        r"I'll create a ticket",
+        r"I am creating a ticket"
+    ]
+    
+    # Check if response mentions ticket but doesn't have a ticket number
+    has_ticket_mention = any(re.search(pattern, response_text, re.IGNORECASE) for pattern in ticket_patterns)
+    has_ticket_number = bool(re.search(r'NVS\d{5}', response_text))
+    
+    if has_ticket_mention and not has_ticket_number:
+        # Generate a ticket number
+        ticket_num = generate_ticket_number()
+        
+        # Find the first ticket mention and add the ticket number after it
+        for pattern in ticket_patterns:
+            match = re.search(pattern, response_text, re.IGNORECASE)
+            if match:
+                # Insert ticket number after the match
+                insertion_point = match.end()
+                # Add period if not present, then add ticket number
+                if response_text[insertion_point-1] not in '.!?':
+                    response_text = response_text[:insertion_point] + f". Ticket Number: {ticket_num}" + response_text[insertion_point:]
+                else:
+                    response_text = response_text[:insertion_point] + f" Ticket Number: {ticket_num}." + response_text[insertion_point:]
+                break
+    
+    return response_text
+
+
 def get_ai_response(user_input: str, image_data: Optional[str] = None, chat_history: list = None) -> str:
     try:
         # Get FAST MCP instance
@@ -760,6 +811,18 @@ Please let me know if you have any SEO tool related questions?"""
 
         # Remove duplicate questions
         response_text = remove_duplicate_questions(response_text)
+        
+        # Ensure "Have I solved your query?" is always on a new paragraph
+        if "Have I solved your query?" in response_text:
+            # Replace any occurrence where it's not after a newline
+            response_text = response_text.replace(" Have I solved your query?", "\n\nHave I solved your query?")
+            # Also handle if it's at the start of a line but without enough spacing
+            response_text = response_text.replace("\nHave I solved your query?", "\n\nHave I solved your query?")
+            # Clean up any triple newlines that might have been created
+            response_text = re.sub(r'\n{3,}Have I solved your query\?', '\n\nHave I solved your query?', response_text)
+        
+        # Inject ticket numbers wherever tickets are mentioned
+        response_text = inject_ticket_numbers(response_text)
 
         return response_text.strip()
     except Exception as e:
@@ -853,7 +916,28 @@ Our team is working on your issue. You'll receive a notification when there's an
         session_state["checking_ticket_status"] = False
         show_feedback = True  # Changed to True
     elif is_greeting(request.message):
-        response = get_intro_response()
+        # Check if there's more content after the greeting (like a problem)
+        message_lower = request.message.lower()
+        # Remove greeting words to check if there's additional content
+        remaining_message = request.message
+        for greeting in GREETING_KEYWORDS:
+            if greeting in message_lower:
+                # Remove the greeting word (case-insensitive) and common punctuation
+                remaining_message = re.sub(rf'\b{greeting}\b[,.]?\s*', '', remaining_message, flags=re.IGNORECASE)
+                break
+        
+        remaining_message = remaining_message.strip()
+        
+        # If there's content after greeting, handle both greeting and the issue
+        if remaining_message and len(remaining_message) > 2:
+            # Greeting + problem response
+            greeting_response = "Hello! I see you're experiencing an issue. Let me help you with that.\n\n"
+            problem_response = get_ai_response(remaining_message, request.image_data, session_state["chat_history"])
+            response = greeting_response + problem_response
+        else:
+            # Just greeting
+            response = get_intro_response()
+        
         session_state["intro_given"] = True
         show_feedback = True  # Changed to True
     else:
@@ -1113,6 +1197,8 @@ with open("templates/index.html", "w") as f:
 
         .message-content {
             max-width: 70%;
+            min-width: min-content;
+            width: fit-content;
             padding: 16px 20px;
             border-radius: 18px;
             font-size: 15px;
@@ -1373,16 +1459,49 @@ with open("templates/index.html", "w") as f:
             display: none;
         }
 
-        /* Initial message styling */
+        /* Initial message styling - Ultra Compact */
         .initial-message .message-content {
-            padding: 12px 16px;
-            line-height: 1.4;
+            padding: 8px 12px !important;
+            line-height: 1.2 !important;
+            max-width: max-content !important;
+            min-width: unset !important;
+            width: max-content !important;
+            display: inline-block !important;
+            font-size: 14px !important;
+        }
+        
+        .initial-message.bot-message-wrapper {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 15px;
         }
 
         .initial-message .avatar {
-            width: 36px;
-            height: 36px;
-            font-size: 14px;
+            width: 32px;
+            height: 32px;
+            font-size: 13px;
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+        
+        .initial-message .timestamp {
+            font-size: 10px;
+            color: rgba(0,0,0,0.4);
+            margin-top: 3px;
+            display: block;
+        }
+        
+        /* Force initial bot message to be compact */
+        .initial-message .bot-message {
+            max-width: max-content !important;
+            width: max-content !important;
+            display: inline-block !important;
+            white-space: nowrap !important;
+        }
+        
+        /* Allow timestamp to wrap normally */
+        .initial-message .bot-message .timestamp {
+            white-space: normal !important;
         }
 
         /* Scrollbar Styling */
@@ -1457,7 +1576,14 @@ with open("templates/index.html", "w") as f:
         </div>
 
         <div class="chat-container" id="chat-container">
-            <!-- Initial greeting message removed -->
+            <!-- Initial greeting message -->
+            <div class="message-wrapper bot-message-wrapper initial-message">
+                <div class="avatar bot-avatar">N</div>
+                <div class="message-content bot-message">
+                    Hi, I am Nova, How may I assist you today?
+                    <div class="timestamp bot-timestamp">Now</div>
+                </div>
+            </div>
         </div>
 
         <div class="input-container">
@@ -1491,6 +1617,12 @@ with open("templates/index.html", "w") as f:
 
         // Current time for welcome message
         document.addEventListener('DOMContentLoaded', function() {
+            // Set current time for initial greeting
+            const initialTimestamp = document.querySelector('.initial-message .timestamp');
+            if (initialTimestamp) {
+                initialTimestamp.textContent = formatTime(new Date());
+            }
+            
             // Load initial suggestions
             loadInitialSuggestions();
         });
