@@ -103,14 +103,12 @@ SPECIAL INSTRUCTIONS:
 3. When comparing pricing plans, you MUST use this exact format with each bullet point on a new line:
 
 Free Plan:
-- 
 Up to 5 websites 
 - Full access to all SEO tools 
 - Generate reports 
 - No credit card required
 
 Pro Plan:
-- 
 Up to 50 websites 
 - All Free features 
 - Priority support 
@@ -118,7 +116,6 @@ Up to 50 websites
 - $49 per month
 
 Enterprise Plan:
-- 
 Unlimited websites (custom limits) 
 - All Pro features 
 - Dedicated account manager 
@@ -632,15 +629,13 @@ def format_pricing_plans(text: str) -> str:
             pricing_section = text[pricing_start:pricing_end]
 
             # Replace the pricing section with properly formatted one
-            formatted_pricing = """Free Plan:
-- 
+            formatted_pricing = """Free Plan: 
 Up to 5 websites 
 - Full access to all SEO tools 
 - Generate reports 
 - No credit card required
 
 Pro Plan:
-- 
 Up to 50 websites 
 - All Free features 
 - Priority support 
@@ -648,7 +643,6 @@ Up to 50 websites
 - $49 per month
 
 Enterprise Plan:
-- 
 Unlimited websites (custom limits) 
 - All Pro features 
 - Dedicated account manager 
