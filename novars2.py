@@ -88,10 +88,11 @@ RESPONSE STYLE:
 - Always use proper grammar with spaces between words and correct punctuation
 
 TICKET GENERATION RULES:
-- IMPORTANT: Whenever you mention creating a support ticket, opening a ticket, or that a ticket is in progress, you MUST include a ticket number in format: NVS##### (5 digits)
-- Example: "I've opened a support ticket for you. Ticket Number: NVS12345. The ticket is now in progress, and an expert will reach out shortly."
-- Always format as "Ticket Number: NVS#####" or "Ticket ID: NVS#####"
+- IMPORTANT: Only generate a ticket number when the user has agreed to have a ticket opened. When the user says 'yes' to your offer to open a ticket, then you must include a ticket number in format: NVS##### in your response.
+- Example: When the user says 'yes' to your offer, respond: 'I've opened a support ticket for you. Ticket Number: NVS12345. The ticket is now in progress, and an expert will reach out shortly.'
+- Always format as 'Ticket Number: NVS#####' or 'Ticket ID: NVS#####' with the ticket number on the same line (no line breaks)
 - When mentioning ticket status, always include the ticket number
+- CRITICAL: The ticket number must always be a continuous string without any line breaks or spaces in the middle (e.g., NVS12345, not NVS\n12345)
 
 SPECIAL INSTRUCTIONS:
 1. If the user asks for SEO analysis of a website, do not perform the analysis. Instead, guide them on how to do it in the Novarsis tool and offer to raise a ticket if they face issues.
@@ -127,9 +128,13 @@ Would you like me to connect with an expert for the Enterprise model?
 
 4. If the user mentions multiple problems, address each one in your response.
 5. At the end of your response, if you feel the answer might be incomplete or the user might need more help, ask: "Have I solved your query?" If the user says no, then offer to connect with an expert and create a support ticket.
-6. IMPORTANT: Never ask more than one question in a single response. If you've already asked a question (like the enterprise model question), do not ask "Have I solved your query?" in the same response.
+6. IMPORTANT: Never ask more than one question in a single response. This means:
+   - If you have already asked a question (like the enterprise model question or an offer to open a ticket), do not ask 'Have I solved your query?' in the same response.
+   - If you are going to ask 'Have I solved your query?', do not ask any other question in the same response.
 7. If the user provides an email address, acknowledge it and continue the conversation. Do not restart the chat.
 8. When greeting, use the short greeting: "Hello! I'm Nova, your personal assistant. How can I help you today?"
+9. When offering to create a support ticket, use the phrase: "For more information, Shall I raise a support ticket for you?" instead of other variations. This question should always appear on a new line.
+10. IMPORTANT: When you indicate that the issue is being handled by the team (e.g., "Our team will review", "get back to you", "working on your issue"), do NOT ask "Have I solved your query?" because the issue is not yet resolved.
 """
 
 # Context-based quick reply suggestions
@@ -668,6 +673,61 @@ def remove_duplicate_questions(text: str) -> str:
             # Remove the "Have I solved your query?" part
             text = text[:query_solved_pos].strip()
 
+    # Check for ticket offer questions and remove "Have I solved your query?" if it appears
+    ticket_offer_patterns = [
+        r"For more information, Shall I raise a support ticket for you",
+        r"Would you like me to open a ticket",
+        r"Should I create a ticket",
+        r"Do you want me to generate a ticket",
+        r"Would you like me to create a support ticket"
+    ]
+
+    for pattern in ticket_offer_patterns:
+        if re.search(pattern, text, re.IGNORECASE):
+            query_solved_pos = text.find("Have I solved your query?")
+            if query_solved_pos != -1:
+                # Remove the "Have I solved your query?" part
+                text = text[:query_solved_pos].strip()
+            break
+
+    # Check for phrases indicating the issue is being handled by the team
+    team_handling_patterns = [
+        r"Our team will",
+        r"get back to you",
+        r"review your",
+        r"working on your",
+        r"expert will reach out",
+        r"team has been notified",
+        r"will contact you"
+    ]
+
+    for pattern in team_handling_patterns:
+        if re.search(pattern, text, re.IGNORECASE):
+            query_solved_pos = text.find("Have I solved your query?")
+            if query_solved_pos != -1:
+                # Remove the "Have I solved your query?" part
+                text = text[:query_solved_pos].strip()
+            break
+
+    return text
+
+
+def fix_ticket_number_formatting(text: str) -> str:
+    """Fix ticket number formatting to ensure it appears on one line"""
+    # Fix any ticket numbers that might have been split by newlines
+    text = re.sub(r'Ticket Number: NVS\s*(\d{5})', r'Ticket Number: NVS\1', text)
+    text = re.sub(r'Ticket ID: NVS\s*(\d{5})', r'Ticket ID: NVS\1', text)
+    text = re.sub(r'NVS\s*(\d{5})', r'NVS\1', text)
+
+    return text
+
+
+def format_ticket_offer_question(text: str) -> str:
+    """Format the ticket offer question to appear on a new line"""
+    # Replace the ticket offer question with the formatted version
+    text = re.sub(r'For more information, Shall I raise a support ticket for you\?',
+                  r'\n\nFor more information, Shall I raise a support ticket for you?', text)
+
     return text
 
 
@@ -676,44 +736,21 @@ def generate_ticket_number() -> str:
     return f"NVS{random.randint(10000, 99999)}"
 
 
-def inject_ticket_numbers(response_text: str) -> str:
-    """Inject ticket numbers wherever tickets are mentioned in the response"""
-    # Patterns to look for ticket mentions
-    ticket_patterns = [
-        r"I've opened a support ticket",
-        r"I've created a.*?ticket",
-        r"support ticket.*?created",
-        r"ticket is now in progress",
-        r"raised a ticket",
-        r"creating a support ticket",
-        r"ticket has been created",
-        r"opened a ticket",
-        r"I'll create a ticket",
-        r"I am creating a ticket"
-    ]
-    
-    # Check if response mentions ticket but doesn't have a ticket number
-    has_ticket_mention = any(re.search(pattern, response_text, re.IGNORECASE) for pattern in ticket_patterns)
-    has_ticket_number = bool(re.search(r'NVS\d{5}', response_text))
-    
-    if has_ticket_mention and not has_ticket_number:
-        # Generate a ticket number
-        ticket_num = generate_ticket_number()
-        
-        # Find the first ticket mention and add the ticket number after it
-        for pattern in ticket_patterns:
-            match = re.search(pattern, response_text, re.IGNORECASE)
-            if match:
-                # Insert ticket number after the match
-                insertion_point = match.end()
-                # Add period if not present, then add ticket number
-                if response_text[insertion_point-1] not in '.!?':
-                    response_text = response_text[:insertion_point] + f". Ticket Number: {ticket_num}" + response_text[insertion_point:]
-                else:
-                    response_text = response_text[:insertion_point] + f" Ticket Number: {ticket_num}." + response_text[insertion_point:]
-                break
-    
-    return response_text
+def clean_response(text: str) -> str:
+    """Clean and format the response text"""
+    # Format pricing plans if present
+    text = format_pricing_plans(text)
+
+    # Remove duplicate questions
+    text = remove_duplicate_questions(text)
+
+    # Fix ticket number formatting
+    text = fix_ticket_number_formatting(text)
+
+    # Format ticket offer question
+    text = format_ticket_offer_question(text)
+
+    return text
 
 
 def get_ai_response(user_input: str, image_data: Optional[str] = None, chat_history: list = None) -> str:
@@ -800,12 +837,9 @@ Please let me know if you have any SEO tool related questions?"""
         # Collapse multiple blank lines into max 2
         response_text = re.sub(r'\n{3,}', '\n\n', response_text)
 
-        # Format pricing plans if present
-        response_text = format_pricing_plans(response_text)
+        # Clean the response (format pricing, remove duplicate questions, fix ticket numbers)
+        response_text = clean_response(response_text)
 
-        # Remove duplicate questions
-        response_text = remove_duplicate_questions(response_text)
-        
         # Ensure "Have I solved your query?" is always on a new paragraph
         if "Have I solved your query?" in response_text:
             # Replace any occurrence where it's not after a newline
@@ -814,9 +848,6 @@ Please let me know if you have any SEO tool related questions?"""
             response_text = response_text.replace("\nHave I solved your query?", "\n\nHave I solved your query?")
             # Clean up any triple newlines that might have been created
             response_text = re.sub(r'\n{3,}Have I solved your query\?', '\n\nHave I solved your query?', response_text)
-        
-        # Inject ticket numbers wherever tickets are mentioned
-        response_text = inject_ticket_numbers(response_text)
 
         return response_text.strip()
     except Exception as e:
@@ -919,9 +950,9 @@ Our team is working on your issue. You'll receive a notification when there's an
                 # Remove the greeting word (case-insensitive) and common punctuation
                 remaining_message = re.sub(rf'\b{greeting}\b[,.]?\s*', '', remaining_message, flags=re.IGNORECASE)
                 break
-        
+
         remaining_message = remaining_message.strip()
-        
+
         # If there's content after greeting, handle both greeting and the issue
         if remaining_message and len(remaining_message) > 2:
             # Greeting + problem response
@@ -931,7 +962,7 @@ Our team is working on your issue. You'll receive a notification when there's an
         else:
             # Just greeting
             response = get_intro_response()
-        
+
         session_state["intro_given"] = True
         show_feedback = True  # Changed to True
     else:
@@ -1463,7 +1494,7 @@ with open("templates/index.html", "w") as f:
             display: inline-block !important;
             font-size: 14px !important;
         }
-        
+
         .initial-message.bot-message-wrapper {
             display: flex;
             align-items: flex-start;
@@ -1477,14 +1508,14 @@ with open("templates/index.html", "w") as f:
             margin-right: 8px;
             flex-shrink: 0;
         }
-        
+
         .initial-message .timestamp {
             font-size: 10px;
             color: rgba(0,0,0,0.4);
             margin-top: 3px;
             display: block;
         }
-        
+
         /* Force initial bot message to be compact */
         .initial-message .bot-message {
             max-width: max-content !important;
@@ -1492,7 +1523,7 @@ with open("templates/index.html", "w") as f:
             display: inline-block !important;
             white-space: nowrap !important;
         }
-        
+
         /* Allow timestamp to wrap normally */
         .initial-message .bot-message .timestamp {
             white-space: normal !important;
@@ -1589,7 +1620,7 @@ with open("templates/index.html", "w") as f:
                 <input type="file" id="file-input" class="file-input" accept="image/jpeg,image/jpg,image/png">
                 <button type="button" class="attachment-btn" id="attachment-btn">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z" fill="currentColor"/>
+                        <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1 -1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z" fill="currentColor"/>
                     </svg>
                 </button>
                 <input type="text" class="message-input" id="message-input" placeholder="Type your message...">
@@ -1616,7 +1647,7 @@ with open("templates/index.html", "w") as f:
             if (initialTimestamp) {
                 initialTimestamp.textContent = formatTime(new Date());
             }
-            
+
             // Load initial suggestions
             loadInitialSuggestions();
         });
@@ -1884,7 +1915,7 @@ with open("templates/index.html", "w") as f:
                     attachmentBtn.classList.remove('success');
                     attachmentBtn.innerHTML = `
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z" fill="currentColor"/>
+                            <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1 -1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z" fill="currentColor"/>
                         </svg>
                     `;
                     uploadedImageData = null;
