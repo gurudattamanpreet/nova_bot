@@ -460,7 +460,9 @@ session_state = {
     "intro_given": False,
     "last_user_query": "",
     "fast_mcp": fast_mcp,  # Add FAST MCP to session
-    "last_bot_message_ends_with_query_solved": False
+    "last_bot_message_ends_with_query_solved": False,
+    "last_activity_time": datetime.now(),  # Track last activity time
+    "idle_message_sent": False  # Track if idle message was already sent
 }
 
 # Initialize current plan
@@ -1288,8 +1290,50 @@ async def read_root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
+@app.post("/api/check-idle")
+async def check_idle():
+    """Check if the chat has been idle for 10 minutes"""
+    current_time = datetime.now()
+    last_activity = session_state.get("last_activity_time", current_time)
+    idle_message_sent = session_state.get("idle_message_sent", False)
+    
+    # Calculate idle time in seconds
+    idle_duration = (current_time - last_activity).total_seconds()
+    
+    # If idle for more than 10 minutes (600 seconds) and haven't sent message yet
+    if idle_duration > 600 and not idle_message_sent:
+        session_state["idle_message_sent"] = True
+        
+        idle_response = "Hopefully your query is resolved, hence closing this chat. Thank you for using Novarsis Support!"
+        
+        # Add the idle message to chat history
+        bot_message = {
+            "role": "assistant",
+            "content": idle_response,
+            "timestamp": datetime.now(),
+            "show_feedback": False,
+            "is_idle_message": True
+        }
+        session_state["chat_history"].append(bot_message)
+        
+        return {
+            "idle": True,
+            "message": idle_response,
+            "idle_duration": idle_duration
+        }
+    
+    return {
+        "idle": False,
+        "idle_duration": idle_duration
+    }
+
+
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
+    # Update last activity time and reset idle flag
+    session_state["last_activity_time"] = datetime.now()
+    session_state["idle_message_sent"] = False
+    
     # Check if the user is responding to "Have I solved your query?"
     if session_state.get("last_bot_message_ends_with_query_solved"):
         if request.message.lower() in ["no", "nope", "not really", "not yet"]:
@@ -2049,6 +2093,64 @@ with open("templates/index.html", "w") as f:
             return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
         }
 
+        // Idle check variables
+        let idleCheckInterval;
+        let chatClosed = false;
+
+        // Function to check idle status
+        async function checkIdleStatus() {
+            if (chatClosed) {
+                // Stop checking if chat is already closed
+                clearInterval(idleCheckInterval);
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/check-idle', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.idle) {
+                    // Chat has been idle for 10 minutes
+                    chatClosed = true;
+                    
+                    // Add the idle message to chat
+                    addMessage('assistant', data.message, false);
+                    
+                    // Disable input and buttons
+                    document.getElementById('message-input').disabled = true;
+                    document.getElementById('message-input').placeholder = 'Chat has been closed due to inactivity';
+                    document.getElementById('message-form').querySelectorAll('button').forEach(btn => {
+                        btn.disabled = true;
+                    });
+                    
+                    // Clear suggestions
+                    updateSuggestions([]);
+                    
+                    // Stop the interval
+                    clearInterval(idleCheckInterval);
+                }
+            } catch (error) {
+                console.error('Error checking idle status:', error);
+            }
+        }
+
+        // Start idle checking every 30 seconds
+        function startIdleChecking() {
+            // Clear any existing interval
+            if (idleCheckInterval) {
+                clearInterval(idleCheckInterval);
+            }
+            
+            // Start new interval to check every 30 seconds
+            idleCheckInterval = setInterval(checkIdleStatus, 30000);
+        }
+
         // Current time for welcome message
         document.addEventListener('DOMContentLoaded', function() {
             // Set current time for initial greeting
@@ -2059,6 +2161,9 @@ with open("templates/index.html", "w") as f:
 
             // Load initial suggestions
             loadInitialSuggestions();
+            
+            // Start idle checking
+            startIdleChecking();
         });
 
         // Chat container
@@ -2236,6 +2341,14 @@ with open("templates/index.html", "w") as f:
 
         // Send message
         async function sendMessage(message, imageData = null) {
+            // Don't send if chat is closed
+            if (chatClosed) {
+                return;
+            }
+            
+            // Restart idle checking timer on user activity
+            startIdleChecking();
+            
             // Handle special commands
             if (message.toLowerCase() === 'check ticket status') {
                 // Clear suggestions
