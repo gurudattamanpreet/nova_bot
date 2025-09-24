@@ -1341,8 +1341,7 @@ async def chat(request: ChatRequest):
         if ticket_id.startswith("NVS") and len(ticket_id) > 3:
             if ticket_id in session_state["support_tickets"]:
                 ticket = session_state["support_tickets"][ticket_id]
-                response = f"""🎫 Ticket Details:
-
+                response = f"""Ticket Details:
 Ticket ID: {ticket_id}
 Status: {ticket['status']}
 Priority: {ticket['priority']}
@@ -1438,16 +1437,10 @@ async def connect_expert():
             "timestamp": datetime.now()
         })
         response = f"""I've created a priority support ticket for you:
-
-🎫 Ticket ID: {ticket_id}
-📱 Status: Escalated to Human Support
-⏱️ Response Time: Within 15 minutes
-
-Our expert team has been notified and will reach out to you shortly via:
-• In-app chat
-• Email to your registered address
-• WhatsApp: {WHATSAPP_NUMBER}
-
+Ticket ID: {ticket_id}
+Status: Escalated to Human Support
+Response Time: Within 15 minutes
+Our expert team has been notified and will reach out to you shortly
 You can check your ticket status anytime by typing 'ticket {ticket_id}'"""
     else:
         response = "I'd be happy to connect you with an expert. Please first send your query so I can create a support ticket for you."
@@ -1468,16 +1461,10 @@ async def feedback(request: FeedbackRequest):
     if request.feedback == "no":
         ticket_id = save_unresolved_query(session_state["current_query"])
         response = f"""I understand this didn't fully resolve your issue. I've created a priority support ticket for you:
-
-🎫 Ticket ID: {ticket_id}
-📱 Status: Escalated to Human Support
-⏱️ Response Time: Within 15 minutes
-
-Our expert team has been notified and will reach out to you shortly via:
-• In-app chat
-• Email to your registered address
-• WhatsApp: {WHATSAPP_NUMBER}
-
+Ticket ID: {ticket_id}
+Status: Escalated to Human Support
+Response Time: Within 15 minutes
+Our expert team has been notified and will reach out to you shortly
 You can check your ticket status anytime by typing 'ticket {ticket_id}'"""
         session_state["resolved_count"] -= 1
     else:
