@@ -86,6 +86,8 @@ RESPONSE STYLE:
 - 2-4 lines for simple queries
 - Use simple, everyday language
 - Always use proper grammar with spaces between words and correct punctuation
+- When user greets with a problem (e.g., "hi, what are features?"), skip greeting and answer directly
+- Only greet back when user sends ONLY a greeting (like just "hi" or "hello")
 
 TICKET GENERATION RULES:
 - IMPORTANT: Only generate a ticket number when the user has agreed to have a ticket opened. When the user says 'yes' to your offer to open a ticket, then you must include a ticket number in format: NVS##### in your response.
@@ -96,12 +98,20 @@ TICKET GENERATION RULES:
 
 SPECIAL INSTRUCTIONS:
 1. If the user asks for SEO analysis of a website, do not perform the analysis. Instead, guide them on how to do it in the Novarsis tool and offer to raise a ticket if they face issues.
-2. When explaining features, include details about the free, pro, and enterprise plans:
-   - Free: Analyze up to 5 websites, access all SEO tools, generate reports.
-   - Pro: Analyze up to 50 websites, access all SEO tools, generate reports.
-   - Enterprise: All features of Pro plan with maximum limits. Contact sales for more information.
-   After explaining, ask: "Would you like me to connect with an expert for the enterprise model?" If the user says yes, then create a support ticket.
-3. When comparing pricing plans, you MUST use this exact format with each bullet point on a new line:
+2. IMPORTANT: When user asks about features of the tool, ONLY list the features. DO NOT mention pricing plans unless specifically asked about pricing, plans, or costs. Features include:
+   - Site audits with technical issue detection
+   - Keyword research and tracking
+   - Competitor analysis and gap identification
+   - Backlink monitoring and reporting
+   - On-page optimization suggestions
+   - Rank tracking across multiple search engines
+   - API access for integration
+   - Customizable report generation
+   - Mobile optimization analysis
+   - Page speed monitoring
+   - Schema markup validation
+   - XML sitemap analysis
+3. When comparing pricing plans (ONLY when asked about pricing/plans/costs), you MUST use this exact format with each bullet point on a new line:
 
 Free Plan:
 Up to 5 websites 
@@ -132,9 +142,13 @@ Would you like me to connect with an expert for the Enterprise model?
    - If you have already asked a question (like the enterprise model question or an offer to open a ticket), do not ask 'Have I solved your query?' in the same response.
    - If you are going to ask 'Have I solved your query?', do not ask any other question in the same response.
 7. If the user provides an email address, acknowledge it and continue the conversation. Do not restart the chat.
-8. When greeting, use the short greeting: "Hello! I'm Nova, your personal assistant. How can I help you today?"
+8. GREETING RULES:
+   - If user says ONLY "hi", "hello", "hey" (single greeting), respond with: "Hello! I'm Nova, your personal assistant. How can I help you today?"
+   - If user says greeting + problem (e.g., "hi, what are the features?"), SKIP the greeting and directly address the problem
+   - Never start with a greeting when the user has already asked a question with their greeting
 9. When offering to create a support ticket, use the phrase: "For more information, Shall I raise a support ticket for you?" instead of other variations. This question should always appear on a new line.
 10. IMPORTANT: When you indicate that the issue is being handled by the team (e.g., "Our team will review", "get back to you", "working on your issue"), do NOT ask "Have I solved your query?" because the issue is not yet resolved.
+11. When asked about features, NEVER include pricing information unless explicitly asked. Only list the tool's features.
 """
 
 # Context-based quick reply suggestions
@@ -753,6 +767,340 @@ def clean_response(text: str) -> str:
     return text
 
 
+def fix_common_spacing_issues(text: str) -> str:
+    """Fix common spacing and hyphenation issues in text"""
+
+    # Pattern to add space between alphanumeric characters (but not for ticket numbers)
+    # First, protect ticket numbers from being modified
+    import re
+    ticket_pattern = r'(NVS\d+)'
+    protected_tickets = {}
+    
+    # Find and protect all ticket numbers
+    for match in re.finditer(ticket_pattern, text):
+        placeholder = f'__TICKET_{len(protected_tickets)}__'
+        protected_tickets[placeholder] = match.group()
+        text = text.replace(match.group(), placeholder)
+    
+    # Now fix spacing between numbers and letters (but not within protected areas)
+    # Add space between number and letter (e.g., "50claude" -> "50 claude")
+    text = re.sub(r'(\d+)([a-zA-Z])', r'\1 \2', text)
+    # Add space between letter and number (e.g., "apple4" -> "apple 4")
+    text = re.sub(r'([a-zA-Z])(\d+)', r'\1 \2', text)
+    
+    # Restore protected ticket numbers
+    for placeholder, original in protected_tickets.items():
+        text = text.replace(placeholder, original)
+
+    # Common words that are often incorrectly combined
+    spacing_fixes = [
+        # Time-related
+        (r'\b(next)(week|month|year|day|time)\b', r'\1 \2'),
+        (r'\b(last)(week|month|year|day|time|night)\b', r'\1 \2'),
+        (r'\b(this)(week|month|year|day|time|morning|afternoon|evening)\b', r'\1 \2'),
+
+        # Common phrases
+        (r'\b(can)(not)\b', r'\1not'),  # cannot should be one word
+        (r'\b(any)(one|body|thing|where|time|way|how)\b', r'\1\2'),  # anyone, anybody, etc.
+        (r'\b(some)(one|body|thing|where|time|times|what|how)\b', r'\1\2'),  # someone, somebody, etc.
+        (r'\b(every)(one|body|thing|where|time|day)\b', r'\1\2'),  # everyone, everybody, etc.
+        (r'\b(no)(one|body|thing|where)\b', r'\1\2'),  # noone -> no one needs special handling
+
+        # Tool-related
+        (r'\b(web)(site|page|master|mail)\b', r'\1\2'),
+        (r'\b(data)(base|set)\b', r'\1\2'),
+        (r'\b(back)(up|end|link|links|ground)\b', r'\1\2'),
+        (r'\b(key)(word|words|board)\b', r'\1\2'),
+        (r'\b(user)(name|names)\b', r'\1\2'),
+        (r'\b(pass)(word|words)\b', r'\1\2'),
+        (r'\b(down)(load|loads|time)\b', r'\1\2'),
+        (r'\b(up)(load|loads|date|dates|grade|time)\b', r'\1\2'),
+
+        # Business/SEO terms
+        (r'\b(on)(line|board|going)\b', r'\1\2'),
+        (r'\b(off)(line|board|set)\b', r'\1\2'),
+        (r'\b(over)(view|all|load|time)\b', r'\1\2'),
+        (r'\b(under)(stand|standing|stood|line|score)\b', r'\1\2'),
+        (r'\b(out)(put|come|reach|line|look)\b', r'\1\2'),
+        (r'\b(in)(put|come|sight|line|bound)\b', r'\1\2'),
+
+        # Common compound words that need space
+        (r'\b(alot)\b', r'a lot'),
+        (r'\b(atleast)\b', r'at least'),
+        (r'\b(aswell)\b', r'as well'),
+        (r'\b(inorder)\b', r'in order'),
+        (r'\b(upto)\b', r'up to'),
+        (r'\b(setup)\b', r'set up'),  # as verb
+
+        # Fix "Im" -> "I'm"
+        (r'\b(Im)\b', r"I'm"),
+        (r'\b(Ive)\b', r"I've"),
+        (r'\b(Ill)\b', r"I'll"),
+        (r'\b(Id)\b', r"I'd"),
+        (r'\b(wont)\b', r"won't"),
+        (r'\b(cant)\b', r"can't"),
+        (r'\b(dont)\b', r"don't"),
+        (r'\b(doesnt)\b', r"doesn't"),
+        (r'\b(didnt)\b', r"didn't"),
+        (r'\b(isnt)\b', r"isn't"),
+        (r'\b(arent)\b', r"aren't"),
+        (r'\b(wasnt)\b', r"wasn't"),
+        (r'\b(werent)\b', r"weren't"),
+        (r'\b(hasnt)\b', r"hasn't"),
+        (r'\b(havent)\b', r"haven't"),
+        (r'\b(hadnt)\b', r"hadn't"),
+        (r'\b(wouldnt)\b', r"wouldn't"),
+        (r'\b(couldnt)\b', r"couldn't"),
+        (r'\b(shouldnt)\b', r"shouldn't"),
+        (r'\b(youre)\b', r"you're"),
+        (r'\b(youve)\b', r"you've"),
+        (r'\b(youll)\b', r"you'll"),
+        (r'\b(youd)\b', r"you'd"),
+        (r'\b(hes)\b', r"he's"),
+        (r'\b(shes)\b', r"she's"),
+        (r'\b(its)\b(?! \w+ing)', r"it's"),  # its -> it's (but not before -ing verbs)
+        (r'\b(were)\b(?! \w+ing)', r"we're"),  # were -> we're contextually
+        (r'\b(theyre)\b', r"they're"),
+        (r'\b(theyve)\b', r"they've"),
+        (r'\b(theyll)\b', r"they'll"),
+        (r'\b(theyd)\b', r"they'd"),
+        (r'\b(whats)\b', r"what's"),
+        (r'\b(wheres)\b', r"where's"),
+        (r'\b(theres)\b', r"there's"),
+        (r'\b(thats)\b', r"that's"),
+
+        # Common hyphenated words
+        (r'\b(re)(check|restart|send|reset|do|run|build)\b', r'\1-\2'),
+        (r'\b(pre)(view|set|defined|configured)\b', r'\1-\2'),
+        (r'\b(co)(operate|ordinate|author)\b', r'\1-\2'),
+        (r'\b(multi)(purpose|factor|level)\b', r'\1-\2'),
+        (r'\b(self)(service|help|hosted)\b', r'\1-\2'),
+        (r'\b(real)(time)\b', r'\1-\2'),
+        (r'\b(up)(to)(date)\b', r'\1-\2-\3'),
+        (r'\b(state)(of)(the)(art)\b', r'\1-\2-\3-\4'),
+
+        # Fix spacing around punctuation
+        (r'\s+([.,!?;:])', r'\1'),  # Remove space before punctuation
+        (r'([.,!?;:])([A-Za-z])', r'\1 \2'),  # Add space after punctuation
+
+        # Fix multiple spaces
+        (r'\s+', r' '),
+    ]
+
+    # Apply all fixes
+    for pattern, replacement in spacing_fixes:
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+
+    # Special case for "no one" (needs special handling)
+    text = re.sub(r'\b(noone)\b', r'no one', text, flags=re.IGNORECASE)
+
+    # Ensure proper capitalization at sentence start
+    text = re.sub(r'^([a-z])', lambda m: m.group(1).upper(), text)
+    text = re.sub(r'([.!?]\s+)([a-z])', lambda m: m.group(1) + m.group(2).upper(), text)
+
+    return text
+
+
+def format_response_text(text: str) -> str:
+    """Format the response text to ensure proper bullet points and numbered lists"""
+    # Split text into lines for processing
+    lines = text.split('\n')
+    formatted_lines = []
+
+    for line in lines:
+        # Skip empty lines
+        if not line.strip():
+            formatted_lines.append('')
+            continue
+
+        # Process numbered lists (e.g., "1. ", "2. ", etc.)
+        if re.match(r'^\s*\d+\.\s+', line):
+            # This is a numbered list item, ensure it's on its own line
+            formatted_lines.append(line)
+
+        # Process bullet points (e.g., "- ", "• ", etc.)
+        elif re.match(r'^\s*[-•]\s+', line):
+            # This is a bullet point, ensure it's on its own line
+            formatted_lines.append(line)
+
+        # Check if line contains numbered list items in the middle
+        elif re.search(r'\s\d+\.\s+', line):
+            # Split the line at numbered list items
+            parts = re.split(r'(\s\d+\.\s+)', line)
+            new_line = parts[0]
+            for i in range(1, len(parts), 2):
+                if i + 1 < len(parts):
+                    # Add the numbered item on a new line
+                    new_line += '\n' + parts[i] + parts[i + 1]
+                else:
+                    new_line += parts[i]
+            formatted_lines.append(new_line)
+
+        # Check if line contains bullet points in the middle
+        elif re.search(r'\s[-•]\s+', line):
+            # Split the line at bullet points
+            parts = re.split(r'(\s[-•]\s+)', line)
+            new_line = parts[0]
+            for i in range(1, len(parts), 2):
+                if i + 1 < len(parts):
+                    # Add the bullet point on a new line
+                    new_line += '\n' + parts[i] + parts[i + 1]
+                else:
+                    new_line += parts[i]
+            formatted_lines.append(new_line)
+
+        # Regular text
+        else:
+            formatted_lines.append(line)
+
+    # Join the formatted lines
+    formatted_text = '\n'.join(formatted_lines)
+
+    # Additional formatting for pricing plans
+    if "Free Plan:" in formatted_text and "Pro Plan:" in formatted_text and "Enterprise Plan:" in formatted_text:
+        # Extract the pricing section
+        pricing_start = formatted_text.find("Free Plan:")
+        if pricing_start != -1:
+            # Find the end of the pricing section
+            pricing_end = formatted_text.find("Would you like me to connect with an expert for the Enterprise model?")
+            if pricing_end == -1:
+                pricing_end = len(formatted_text)
+
+            pricing_section = formatted_text[pricing_start:pricing_end]
+
+            # Format each pricing plan
+            plans = re.split(r'(Free Plan:|Pro Plan:|Enterprise Plan:)', pricing_section)
+            formatted_plans = []
+
+            for i in range(1, len(plans), 2):
+                if i + 1 < len(plans):
+                    plan_name = plans[i]
+                    plan_details = plans[i + 1]
+
+                    # Format the plan details with bullet points
+                    details = plan_details.split('-')
+                    formatted_details = [details[0].strip()]  # First part (e.g., "Up to 5 websites")
+
+                    for detail in details[1:]:
+                        if detail.strip():
+                            formatted_details.append(f"- {detail.strip()}")
+
+                    formatted_plans.append(f"{plan_name}\n" + '\n'.join(formatted_details))
+
+            # Replace the pricing section in the original text
+            formatted_text = formatted_text[:pricing_start] + '\n\n'.join(formatted_plans) + formatted_text[
+                                                                                             pricing_end:]
+
+    return formatted_text
+
+
+def format_response_lists(text: str) -> str:
+    """Format numbered lists and bullet points to appear on separate lines with proper spacing"""
+
+    # First handle variations of "follow these steps" or similar phrases
+    step_intros = [
+        r'(follow these steps?:?)\s*',
+        r'(here are the steps?:?)\s*',
+        r'(try these steps?:?)\s*',
+        r'(please try:?)\s*',
+        r'(steps to follow:?)\s*',
+        r'(you can:?)\s*',
+        r'(to do this:?)\s*',
+    ]
+
+    for pattern in step_intros:
+        text = re.sub(pattern + r'(\d+\.)', r'\1\n\n\2', text, flags=re.IGNORECASE)
+
+    # Fix numbered lists that appear inline (e.g., "text. 1. item 2. item")
+    # Add newline before numbers that follow a period but aren't already on new line
+    text = re.sub(r'([.!?])\s+(\d+\.\s+)', r'\1\n\n\2', text)
+
+    # Handle numbered items that are separated by just a space
+    # Pattern: "1. something 2. something" -> "1. something\n2. something"
+    text = re.sub(r'(\d+\.[^\n.!?]+[.!?]?)\s+(\d+\.\s+)', r'\1\n\n\2', text)
+
+    # Ensure numbered items at start of line
+    text = re.sub(r'(?<!\n)(\d+\.\s+[A-Z])', r'\n\1', text)
+
+    # Handle bullet points (-, *, •)
+    # Add newline before bullet if not already there
+    text = re.sub(r'(?<!\n)\s*([•\-\*])\s+([A-Z])', r'\n\1 \2', text)
+
+    # Handle "Plan details" and plan names
+    text = re.sub(r'(Plan details?:?)\s*(?!\n)', r'\n\n\1\n', text, flags=re.IGNORECASE)
+
+    # Format each plan name on new line with proper spacing
+    plan_names = ['Free Plan:', 'Pro Plan:', 'Premium Plan:', 'Enterprise Plan:', 'Starter Plan:', 'Basic Plan:']
+    for plan in plan_names:
+        # Look for plan name and ensure it's on new line with spacing
+        text = re.sub(rf'(?<!\n)({plan})', r'\n\n\1', text, flags=re.IGNORECASE)
+        # Add newline after plan name if features follow immediately
+        text = re.sub(rf'({plan})\s*([A-Z\-•])', r'\1\n\2', text, flags=re.IGNORECASE)
+
+    # Handle Step-by-step instructions
+    text = re.sub(r'(?<!\n)(Step\s+\d+[:.])\s*', r'\n\n\1 ', text, flags=re.IGNORECASE)
+
+    # Clean up multiple spaces
+    text = re.sub(r' +', ' ', text)
+
+    # Clean up excessive newlines but keep proper spacing
+    text = re.sub(r'\n{4,}', r'\n\n\n', text)
+
+    # Remove leading/trailing whitespace from each line
+    lines = text.split('\n')
+    lines = [line.strip() for line in lines]
+    text = '\n'.join(lines)
+
+    return text.strip()
+
+
+def format_response_presentable(text: str) -> str:
+    """Make the response more presentable with proper formatting"""
+
+    # Ensure questions are on new paragraphs
+    questions_patterns = [
+        r'(Would you like[^?]+\?)',
+        r'(Do you [^?]+\?)',
+        r'(Have I [^?]+\?)',
+        r'(Should I [^?]+\?)',
+        r'(Can I [^?]+\?)',
+        r'(Shall I [^?]+\?)',
+        r'(For more information[^?]+\?)',
+        r'(Is there [^?]+\?)',
+        r'(Did this [^?]+\?)',
+        r'(Does this [^?]+\?)',
+    ]
+
+    for pattern in questions_patterns:
+        # Add double newline before question if not already present
+        text = re.sub(r'(?<!\n\n)' + pattern, r'\n\n\1', text, flags=re.IGNORECASE)
+
+    # Format specific sections that often appear
+    # Ticket information
+    text = re.sub(r'(Ticket (?:Number|ID):\s*NVS\d+)', r'\n\1', text)
+
+    # Format error/solution sections
+    text = re.sub(r'((?:Error|Solution|Note|Tip|Warning|Important):)\s*', r'\n\n\1\n', text, flags=re.IGNORECASE)
+
+    # Ensure proper paragraph breaks after sentences before certain keywords
+    paragraph_triggers = [
+        'To ', 'For ', 'Please ', 'You can ', 'Try ', 'Follow ',
+        'First ', 'Second ', 'Third ', 'Next ', 'Then ', 'Finally ',
+        'Additionally ', 'Also ', 'Furthermore ', 'However ',
+    ]
+
+    for trigger in paragraph_triggers:
+        text = re.sub(rf'([.!?])\s+({trigger})', r'\1\n\n\2', text)
+
+    # Clean up spacing issues
+    text = re.sub(r'\s*\n\s*', r'\n', text)  # Remove spaces around newlines
+    text = re.sub(r'\n{3,}', r'\n\n', text)  # Max 2 newlines
+    text = re.sub(r'^\n+', '', text)  # Remove leading newlines
+    text = re.sub(r'\n+$', '', text)  # Remove trailing newlines
+
+    return text.strip()
+
+
 def get_ai_response(user_input: str, image_data: Optional[str] = None, chat_history: list = None) -> str:
     try:
         # Get FAST MCP instance
@@ -788,6 +1136,23 @@ Please let me know if you have any SEO tool related questions?"""
 
         # Call Ollama API
         response_text = call_ollama_api(prompt, image_data)
+        
+        # Fix alphanumeric spacing FIRST (before other processing)
+        # Protect ticket numbers
+        ticket_pattern = r'(NVS\d+)'
+        protected_tickets = {}
+        for match in re.finditer(ticket_pattern, response_text):
+            placeholder = f'__TICKET_{len(protected_tickets)}__'
+            protected_tickets[placeholder] = match.group()
+            response_text = response_text.replace(match.group(), placeholder)
+        
+        # Add spaces between numbers and letters
+        response_text = re.sub(r'(\d+)([a-zA-Z])', r'\1 \2', response_text)
+        response_text = re.sub(r'([a-zA-Z])(\d+)', r'\1 \2', response_text)
+        
+        # Restore ticket numbers
+        for placeholder, original in protected_tickets.items():
+            response_text = response_text.replace(placeholder, original)
 
         # Enhanced cleaning for grammar and formatting
         # Remove ** symbols
@@ -815,30 +1180,23 @@ Please let me know if you have any SEO tool related questions?"""
         response_text = re.sub(r'\s+', ' ', response_text)
         # Ensure proper paragraph separation
         response_text = re.sub(r'([.!?])\s', r'\1\n\n', response_text)
-        # Convert dashes to bullets if they appear at the start of a line
-        response_text = re.sub(r'^\s*-\s+', '• ', response_text, flags=re.MULTILINE)
+
+        # Format the response text to ensure proper bullet points and numbered lists
+        response_text = format_response_text(response_text)
+
         # --- End formatting improvements ---
-
-        # Format numbered lists: number stays with title, add a blank line after each block
-        response_text = re.sub(r'\n?(\d+\.)\s*', r'\n\n\1 ', response_text)  # Ensure number+title on same line
-        # Add spacing after list item sentences for readability
-        response_text = re.sub(r'(\n\d+\. [^\n]+)(?=\n\d+\.)', r'\1\n', response_text)
-        response_text = re.sub(r'(•)', r'\n\1', response_text)  # Bullets
-        response_text = re.sub(r'(Step\s+\d+)', r'\n\1', response_text)  # Steps
-        response_text = re.sub(r'(Tip:)', r'\n\1', response_text)  # Tips
-        response_text = re.sub(r'(Solution:)', r'\n\1', response_text)  # Solutions
-        response_text = re.sub(r'(Alternative:)', r'\n\1', response_text)  # Alternatives
-
-        # --- Final cleanup for unnecessary spaces and gaps ---
-        # Remove spaces before punctuation
-        response_text = re.sub(r'\s+([.,!?;:])', r'\1', response_text)
-        # Remove extra spaces at line beginnings
-        response_text = re.sub(r'^\s+', '', response_text, flags=re.MULTILINE)
-        # Collapse multiple blank lines into max 2
-        response_text = re.sub(r'\n{3,}', '\n\n', response_text)
 
         # Clean the response (format pricing, remove duplicate questions, fix ticket numbers)
         response_text = clean_response(response_text)
+
+        # Fix common spacing and grammar issues
+        response_text = fix_common_spacing_issues(response_text)
+
+        # Format numbered lists and bullet points for better presentation
+        response_text = format_response_lists(response_text)
+
+        # Make the response more presentable
+        response_text = format_response_presentable(response_text)
 
         # Ensure "Have I solved your query?" is always on a new paragraph
         if "Have I solved your query?" in response_text:
@@ -953,12 +1311,11 @@ Our team is working on your issue. You'll receive a notification when there's an
 
         remaining_message = remaining_message.strip()
 
-        # If there's content after greeting, handle both greeting and the issue
+        # If there's content after greeting, handle the FULL MESSAGE but with instruction to skip greeting
         if remaining_message and len(remaining_message) > 2:
-            # Greeting + problem response
-            greeting_response = "Hello! I see you're experiencing an issue. Let me help you with that.\n\n"
-            problem_response = get_ai_response(remaining_message, request.image_data, session_state["chat_history"])
-            response = greeting_response + problem_response
+            # Pass the full message but with special instruction to skip greeting
+            enhanced_input = f"[USER HAS GREETED WITH PROBLEM - SKIP GREETING AND DIRECTLY ADDRESS THE ISSUE]\n{request.message}"
+            response = get_ai_response(enhanced_input, request.image_data, session_state["chat_history"])
         else:
             # Just greeting
             response = get_intro_response()
