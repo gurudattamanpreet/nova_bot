@@ -91,10 +91,11 @@ RESPONSE STYLE:
 
 TICKET GENERATION RULES:
 - IMPORTANT: Only generate a ticket number when the user has agreed to have a ticket opened. When the user says 'yes' to your offer to open a ticket, then you must include a ticket number in format: NVS##### in your response.
-- Example: When the user says 'yes' to your offer, respond: 'I've opened a support ticket for you. Ticket Number: NVS12345. The ticket is now in progress, and an expert will reach out shortly.'
+- Example: When the user says 'yes' to your offer, respond: 'I've opened a support ticket for you. Ticket Number: NVS[RANDOM_5_DIGIT]. The ticket is now in progress, and an expert will reach out shortly.'
 - Always format as 'Ticket Number: NVS#####' or 'Ticket ID: NVS#####' with the ticket number on the same line (no line breaks)
+- Generate a RANDOM 5-digit number after NVS (e.g., NVS73534, NVS89421, NVS45678). NEVER use NVS12345 as it's just an example.
 - When mentioning ticket status, always include the ticket number
-- CRITICAL: The ticket number must always be a continuous string without any line breaks or spaces in the middle (e.g., NVS12345, not NVS\n12345)
+- CRITICAL: The ticket number must always be a continuous string without any line breaks or spaces in the middle (e.g., NVS73534, not NVS\n73534 or NVS 73534)
 
 SPECIAL INSTRUCTIONS:
 1. If the user asks for SEO analysis of a website, do not perform the analysis. Instead, guide them on how to do it in the Novarsis tool and offer to raise a ticket if they face issues.
@@ -728,10 +729,17 @@ def remove_duplicate_questions(text: str) -> str:
 
 def fix_ticket_number_formatting(text: str) -> str:
     """Fix ticket number formatting to ensure it appears on one line"""
-    # Fix any ticket numbers that might have been split by newlines
-    text = re.sub(r'Ticket Number: NVS\s*(\d{5})', r'Ticket Number: NVS\1', text)
-    text = re.sub(r'Ticket ID: NVS\s*(\d{5})', r'Ticket ID: NVS\1', text)
-    text = re.sub(r'NVS\s*(\d{5})', r'NVS\1', text)
+    # Fix any ticket numbers that might have been split by newlines or spaces
+    text = re.sub(r'Ticket Number:\s*NVS\s*([\d\s]+)',
+                  lambda m: f'Ticket Number: NVS{m.group(1).replace(" ", "").replace("\n", "")}', text)
+    text = re.sub(r'Ticket ID:\s*NVS\s*([\d\s]+)',
+                  lambda m: f'Ticket ID: NVS{m.group(1).replace(" ", "").replace("\n", "")}', text)
+
+    # Fix standalone NVS numbers that might be split
+    text = re.sub(r'NVS\s+([\d]{5})', r'NVS\1', text)
+
+    # Ensure no line breaks within ticket numbers
+    text = re.sub(r'(Ticket (?:Number|ID):\s*)NVS\n([\d]+)', r'\1NVS\2', text)
 
     return text
 
@@ -752,17 +760,24 @@ def generate_ticket_number() -> str:
 
 def clean_response(text: str) -> str:
     """Clean and format the response text"""
+    # First fix any broken ticket numbers
+    text = fix_ticket_number_formatting(text)
+
     # Format pricing plans if present
     text = format_pricing_plans(text)
 
     # Remove duplicate questions
     text = remove_duplicate_questions(text)
 
-    # Fix ticket number formatting
+    # Fix ticket number formatting again after other processing
     text = fix_ticket_number_formatting(text)
 
     # Format ticket offer question
     text = format_ticket_offer_question(text)
+
+    # Final check: ensure no line breaks in ticket numbers
+    text = re.sub(r'(NVS)\s*\n\s*([\d]{5})', r'\1\2', text)
+    text = re.sub(r'(NVS)\s+([\d]{5})', r'\1\2', text)
 
     return text
 
@@ -775,19 +790,19 @@ def fix_common_spacing_issues(text: str) -> str:
     import re
     ticket_pattern = r'(NVS\d+)'
     protected_tickets = {}
-    
+
     # Find and protect all ticket numbers
     for match in re.finditer(ticket_pattern, text):
         placeholder = f'__TICKET_{len(protected_tickets)}__'
         protected_tickets[placeholder] = match.group()
         text = text.replace(match.group(), placeholder)
-    
+
     # Now fix spacing between numbers and letters (but not within protected areas)
     # Add space between number and letter (e.g., "50claude" -> "50 claude")
     text = re.sub(r'(\d+)([a-zA-Z])', r'\1 \2', text)
     # Add space between letter and number (e.g., "apple4" -> "apple 4")
     text = re.sub(r'([a-zA-Z])(\d+)', r'\1 \2', text)
-    
+
     # Restore protected ticket numbers
     for placeholder, original in protected_tickets.items():
         text = text.replace(placeholder, original)
@@ -1101,6 +1116,39 @@ def format_response_presentable(text: str) -> str:
     return text.strip()
 
 
+def extract_and_save_ticket_from_response(response_text: str, user_query: str) -> None:
+    """Extract ticket number from AI response and save it to session state"""
+    # Pattern to find ticket numbers in the response
+    ticket_patterns = [
+        r'Ticket Number:\s*(NVS\d{5})',
+        r'Ticket ID:\s*(NVS\d{5})',
+        r'ticket\s+(NVS\d{5})',
+        r'(NVS\d{5})'
+    ]
+
+    for pattern in ticket_patterns:
+        match = re.search(pattern, response_text, re.IGNORECASE)
+        if match:
+            ticket_id = match.group(1) if '(' in pattern else match.group(0).split(':')[-1].strip()
+
+            # Check if this is a valid ticket format
+            if re.match(r'^NVS\d{5}$', ticket_id):
+                # Save the ticket to session state
+                ticket_data = {
+                    'query': user_query,
+                    'timestamp': datetime.now(),
+                    'ticket_id': ticket_id,
+                    'status': 'In Progress',
+                    'priority': 'Normal'
+                }
+
+                # Add to support tickets if not already present
+                if ticket_id not in session_state["support_tickets"]:
+                    session_state["support_tickets"][ticket_id] = ticket_data
+                    logger.info(f"Saved ticket {ticket_id} to session state")
+                break
+
+
 def get_ai_response(user_input: str, image_data: Optional[str] = None, chat_history: list = None) -> str:
     try:
         # Get FAST MCP instance
@@ -1136,7 +1184,7 @@ Please let me know if you have any SEO tool related questions?"""
 
         # Call Ollama API
         response_text = call_ollama_api(prompt, image_data)
-        
+
         # Fix alphanumeric spacing FIRST (before other processing)
         # Protect ticket numbers
         ticket_pattern = r'(NVS\d+)'
@@ -1145,11 +1193,11 @@ Please let me know if you have any SEO tool related questions?"""
             placeholder = f'__TICKET_{len(protected_tickets)}__'
             protected_tickets[placeholder] = match.group()
             response_text = response_text.replace(match.group(), placeholder)
-        
+
         # Add spaces between numbers and letters
         response_text = re.sub(r'(\d+)([a-zA-Z])', r'\1 \2', response_text)
         response_text = re.sub(r'([a-zA-Z])(\d+)', r'\1 \2', response_text)
-        
+
         # Restore ticket numbers
         for placeholder, original in protected_tickets.items():
             response_text = response_text.replace(placeholder, original)
@@ -1197,6 +1245,17 @@ Please let me know if you have any SEO tool related questions?"""
 
         # Make the response more presentable
         response_text = format_response_presentable(response_text)
+
+        # Final ticket number cleanup - ensure no breaks in ticket numbers
+        # This is critical to handle any NVS numbers that got split
+        response_text = re.sub(r'(Ticket (?:Number|ID):\s*)NVS\s*\n\s*([\d]+)', r'\1NVS\2', response_text)
+        response_text = re.sub(r'NVS\s*\n\s*([\d]{5})', r'NVS\1', response_text)
+        response_text = re.sub(r'NVS\s+([\d]{5})', r'NVS\1', response_text)
+
+        # Replace example ticket number NVS12345 with a random one if it appears
+        if 'NVS12345' in response_text:
+            random_ticket = f'NVS{random.randint(10000, 99999)}'
+            response_text = response_text.replace('NVS12345', random_ticket)
 
         # Ensure "Have I solved your query?" is always on a new paragraph
         if "Have I solved your query?" in response_text:
@@ -1320,11 +1379,17 @@ Our team is working on your issue. You'll receive a notification when there's an
             # Just greeting
             response = get_intro_response()
 
+        # Extract and save any ticket numbers from the response
+        extract_and_save_ticket_from_response(response, request.message)
+
         session_state["intro_given"] = True
         show_feedback = True  # Changed to True
     else:
         response = get_ai_response(request.message, request.image_data, session_state["chat_history"])
         show_feedback = True  # Already True
+
+        # Extract and save any ticket numbers from the AI response
+        extract_and_save_ticket_from_response(response, request.message)
 
     # Update FAST MCP with bot response
     if "fast_mcp" in session_state:
