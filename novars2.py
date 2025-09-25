@@ -31,7 +31,7 @@ app = FastAPI(title="Novarsis Support Center", description="AI Support Assistant
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY",
                            "14bfe5365cc246dc82d933e3af2aa5b6.hz2asqgJi2bO_gpN7Cp1Hcku")  # Empty default, will be set via environment
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "https://ollama.com")  # Default to hosted service
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gpt-oss:120b")  # Default model
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "deepseek-v3.1:671b")  # Default model
 USE_HOSTED_OLLAMA = True  # Always use hosted service
 
 # Initialize Ollama model
@@ -47,13 +47,20 @@ logger.info("Using keyword-based filtering (Ollama doesn't provide embedding API
 WHATSAPP_NUMBER = "+91-9999999999"
 SUPPORT_EMAIL = "support@novarsis.tech"
 
-# Enhanced System Prompt
-SYSTEM_PROMPT = """You are Nova, the official AI support assistant for Novarsis AIO SEO Tool.
+# Enhanced System Prompt - MOBILE APP OPTIMIZED
+SYSTEM_PROMPT = """You are Nova, the official AI support assistant for Novarsis AIO SEO Tool Mobile App.
+
+IMPORTANT: You are responding in a MOBILE APP environment. Keep responses:
+- SHORT and CONCISE (max 2-3 paragraphs)
+- Use mobile-friendly formatting (short lines, clear breaks)
+- Avoid long lists - use maximum 3-4 bullet points
+- Use emojis sparingly for better mobile UX (✓ ✗ 📱 💡 ⚠️)
+- Responses should fit on mobile screen without excessive scrolling
 
 PERSONALITY:
 - Natural and conversational like a human
 - Friendly and approachable
-- Brief but complete responses
+- Brief but complete responses for mobile screens
 - Polite and professional
 - Ensure proper grammar with correct spacing and punctuation
 
@@ -80,11 +87,13 @@ For unrelated queries, politely say:
 "Sorry, I only help with Novarsis SEO Tool.
 Please let me know if you have any SEO tool related questions?"
 
-RESPONSE STYLE:
+RESPONSE STYLE (MOBILE OPTIMIZED):
 - Natural conversation flow
-- Answer directly without overthinking
-- 2-4 lines for simple queries
+- Keep responses SHORT for mobile screens
+- 1-2 lines for simple queries, max 3-4 lines for complex ones
 - Use simple, everyday language
+- Break long sentences into shorter ones for mobile readability
+- Use line breaks between different points
 - Always use proper grammar with spaces between words and correct punctuation
 - When user greets with a problem (e.g., "hi, what are features?"), skip greeting and answer directly
 - Only greet back when user sends ONLY a greeting (like just "hi" or "hello")
@@ -100,40 +109,30 @@ TICKET GENERATION RULES:
 SPECIAL INSTRUCTIONS:
 1. If the user asks for SEO analysis of a website, do not perform the analysis. Instead, guide them on how to do it in the Novarsis tool and offer to raise a ticket if they face issues.
 2. IMPORTANT: When user asks about features of the tool, ONLY list the features. DO NOT mention pricing plans unless specifically asked about pricing, plans, or costs. Features include:
-   - Site audits with technical issue detection
-   - Keyword research and tracking
-   - Competitor analysis and gap identification
-   - Backlink monitoring and reporting
-   - On-page optimization suggestions
-   - Rank tracking across multiple search engines
-   - API access for integration
-   - Customizable report generation
-   - Mobile optimization analysis
-   - Page speed monitoring
-   - Schema markup validation
-   - XML sitemap analysis
-3. When comparing pricing plans (ONLY when asked about pricing/plans/costs), you MUST use this exact format with each bullet point on a new line:
+   ✓ Site audits & issue detection
+   ✓ Keyword research & tracking
+   ✓ Competitor analysis
+   ✓ Backlink monitoring
+   ✓ On-page SEO tips
+   ✓ Rank tracking
+   ✓ Custom reports
+   ✓ Mobile optimization
+3. When comparing pricing plans (ONLY when asked about pricing/plans/costs), use MOBILE-FRIENDLY format:
 
-Free Plan:
-Up to 5 websites 
-- Full access to all SEO tools 
-- Generate reports 
-- No credit card required
+📱 **Free Plan**
+• 5 websites
+• All SEO tools
+• $0/month
 
-Pro Plan:
-Up to 50 websites 
-- All Free features 
-- Priority support 
-- API access 
-- $49 per month
+💼 **Pro Plan** 
+• 50 websites
+• Priority support
+• $49/month
 
-Enterprise Plan:
-Unlimited websites (custom limits) 
-- All Pro features 
-- Dedicated account manager 
-- SLA guarantees 
-- Custom integrations 
-- Contact sales for a quote
+🏢 **Enterprise**
+• Unlimited sites
+• Dedicated manager
+• Custom pricing
 
 Would you like me to connect with an expert for the Enterprise model?
 
@@ -150,6 +149,7 @@ Would you like me to connect with an expert for the Enterprise model?
 9. When offering to create a support ticket, use the phrase: "For more information, Shall I raise a support ticket for you?" instead of other variations. This question should always appear on a new line.
 10. IMPORTANT: When you indicate that the issue is being handled by the team (e.g., "Our team will review", "get back to you", "working on your issue"), do NOT ask "Have I solved your query?" because the issue is not yet resolved.
 11. When asked about features, NEVER include pricing information unless explicitly asked. Only list the tool's features.
+12. IMPORTANT: When a user provides an email address, do NOT repeat or display ANY email address in your response. Simply acknowledge receipt without showing the email.
 """
 
 # Context-based quick reply suggestions
@@ -210,10 +210,34 @@ QUICK_REPLY_SUGGESTIONS = {
 }
 
 
+def get_mobile_quick_actions(response: str) -> list:
+    """Get mobile-optimized quick action buttons based on response."""
+    actions = []
+    
+    # Check response content for relevant actions
+    if "ticket" in response.lower() and "NVS" in response:
+        actions.append({"text": "📋 View Ticket", "action": "view_ticket"})
+    
+    if "expert" in response.lower() or "support" in response.lower():
+        actions.append({"text": "📞 Call Support", "action": "call_support"})
+        
+    if "report" in response.lower():
+        actions.append({"text": "📊 View Report", "action": "view_report"})
+        
+    if "upgrade" in response.lower() or "plan" in response.lower():
+        actions.append({"text": "⬆️ Upgrade Plan", "action": "upgrade_plan"})
+    
+    # Always include help option
+    if len(actions) < 3:
+        actions.append({"text": "💬 Chat More", "action": "continue_chat"})
+    
+    return actions[:3]  # Max 3 actions for mobile UI
+
 def get_context_suggestions(message: str) -> list:
-    """Get relevant quick reply suggestions based on user's input context."""
+    """Get relevant quick reply suggestions based on user's input context - MOBILE OPTIMIZED."""
     if not message or len(message.strip()) < 2:
-        return QUICK_REPLY_SUGGESTIONS["initial"]
+        # Return only 4 suggestions for mobile
+        return QUICK_REPLY_SUGGESTIONS["initial"][:4]
 
     message_lower = message.lower().strip()
 
@@ -221,30 +245,30 @@ def get_context_suggestions(message: str) -> list:
     if len(message_lower) < 3:
         return []
 
-    # Check for specific actions first
+    # Check for specific actions first - Mobile optimized (max 3 suggestions)
     if any(word in message_lower for word in ['ticket', 'status', 'track', 'nvs']):
-        return ["Check ticket status", "Connect with an Expert", "View all tickets", "Create new ticket"]
+        return ["📋 Check ticket", "💬 Expert help", "📞 Call support"]
     elif any(word in message_lower for word in ['expert', 'human', 'agent', 'support', 'help']):
-        return ["Connect with an Expert", "Check ticket status", "Call support", "Email support"]
+        return ["💬 Expert help", "📋 Check ticket", "📞 Call support"]
     # Check for keywords and return appropriate suggestions
     elif any(
             word in message_lower for word in ['seo', 'analysis', 'analyze', 'score', 'optimization', 'meta', 'crawl']):
-        return QUICK_REPLY_SUGGESTIONS["seo_analysis"]
+        return QUICK_REPLY_SUGGESTIONS["seo_analysis"][:3]  # Max 3 for mobile
     elif any(word in message_lower for word in
              ['account', 'subscription', 'plan', 'billing', 'payment', 'upgrade', 'cancel']):
-        return QUICK_REPLY_SUGGESTIONS["account"]
+        return QUICK_REPLY_SUGGESTIONS["account"][:3]
     elif any(word in message_lower for word in
              ['error', 'issue', 'problem', 'not working', 'failed', 'stuck', 'broken']):
-        return QUICK_REPLY_SUGGESTIONS["error"]
+        return QUICK_REPLY_SUGGESTIONS["error"][:3]
     elif any(word in message_lower for word in ['report', 'export', 'pdf', 'schedule', 'download']):
-        return QUICK_REPLY_SUGGESTIONS["report"]
+        return QUICK_REPLY_SUGGESTIONS["report"][:3]
     elif any(word in message_lower for word in ['api', 'integration', 'technical', 'login', 'password']):
-        return QUICK_REPLY_SUGGESTIONS["technical"]
+        return QUICK_REPLY_SUGGESTIONS["technical"][:3]
     elif any(word in message_lower for word in ['price', 'pricing', 'cost', 'plan', 'cheap', 'expensive', 'free']):
-        return QUICK_REPLY_SUGGESTIONS["pricing"]
+        return QUICK_REPLY_SUGGESTIONS["pricing"][:3]
     elif any(word in message_lower for word in ['how', 'what', 'why', 'when', 'where']):
         # For question words, show initial helpful suggestions
-        return QUICK_REPLY_SUGGESTIONS["initial"]
+        return QUICK_REPLY_SUGGESTIONS["initial"][:3]  # Max 3 for mobile
     else:
         return []
 
@@ -460,9 +484,7 @@ session_state = {
     "intro_given": False,
     "last_user_query": "",
     "fast_mcp": fast_mcp,  # Add FAST MCP to session
-    "last_bot_message_ends_with_query_solved": False,
-    "last_activity_time": datetime.now(),  # Track last activity time
-    "idle_message_sent": False  # Track if idle message was already sent
+    "last_bot_message_ends_with_query_solved": False
 }
 
 # Initialize current plan
@@ -486,6 +508,8 @@ class Message(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     image_data: Optional[str] = None
+    platform: str = "mobile"  # Added platform identifier
+    device_info: Optional[Dict] = None  # Device info for better responses
 
 
 class TicketStatusRequest(BaseModel):
@@ -549,6 +573,9 @@ def is_novarsis_related(query: str) -> bool:
 
 
 def get_intro_response() -> str:
+    # Check if it's mobile platform
+    if session_state.get("platform") == "mobile":
+        return "Hi! I'm Nova 👋\nHow can I help you today?"
     return "Hello! I'm Nova, your personal assistant. How can I help you today?"
 
 
@@ -788,7 +815,7 @@ def fix_common_spacing_issues(text: str) -> str:
     """Fix common spacing and hyphenation issues in text"""
 
     # Pattern to add space between alphanumeric characters (but not for ticket numbers)
-    # First, protect ticket numbers from being modified
+    # First, protect ticket numbers
     import re
     ticket_pattern = r'(NVS\d+)'
     protected_tickets = {}
@@ -821,7 +848,7 @@ def fix_common_spacing_issues(text: str) -> str:
         (r'\b(any)(one|body|thing|where|time|way|how)\b', r'\1\2'),  # anyone, anybody, etc.
         (r'\b(some)(one|body|thing|where|time|times|what|how)\b', r'\1\2'),  # someone, somebody, etc.
         (r'\b(every)(one|body|thing|where|time|day)\b', r'\1\2'),  # everyone, everybody, etc.
-        (r'\b(no)(one|body|thing|where)\b', r'\1\2'),  # noone -> no one needs special handling
+        (r'\b(no)(one|body|thing|where)\b', r'\1 \2'),  # noone -> no one needs space
 
         # Tool-related
         (r'\b(web)(site|page|master|mail)\b', r'\1\2'),
@@ -908,7 +935,7 @@ def fix_common_spacing_issues(text: str) -> str:
     for pattern, replacement in spacing_fixes:
         text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
 
-    # Special case for "no one" (needs special handling)
+    # Special case for "no one" (needs space)
     text = re.sub(r'\b(noone)\b', r'no one', text, flags=re.IGNORECASE)
 
     # Ensure proper capitalization at sentence start
@@ -1151,6 +1178,30 @@ def extract_and_save_ticket_from_response(response_text: str, user_query: str) -
                 break
 
 
+def remove_email_from_response(original_input: str, response_text: str) -> str:
+    """Remove ALL email addresses from the response text, not just from user input"""
+    # Pattern to find any email address in the response
+    email_pattern = r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
+    
+    # Replace all email addresses with [email hidden]
+    response_text = re.sub(email_pattern, '[email hidden]', response_text)
+    
+    # Also handle cases where email might be partially displayed
+    # Pattern for text that looks like an email but might have spaces
+    partial_email_pattern = r"\b[A-Za-z0-9._%+-]+\s*@\s*[A-Za-z0-9.-]+\s*\.\s*[A-Z|a-z]{2,}\b"
+    response_text = re.sub(partial_email_pattern, '[email hidden]', response_text, flags=re.IGNORECASE)
+    
+    # Handle cases where the @ symbol might be replaced with 'at'
+    at_pattern = r"\b[A-Za-z0-9._%+-]+\s+at\s+[A-Za-z0-9.-]+\s*\.\s*[A-Z|a-z]{2,}\b"
+    response_text = re.sub(at_pattern, '[email hidden]', response_text, flags=re.IGNORECASE)
+    
+    # Clean up any double spaces that might have been left behind
+    response_text = re.sub(r'\s+', ' ', response_text)
+    response_text = re.sub(r'\s+([.,!?])', r'\1', response_text)  # Remove space before punctuation
+    
+    return response_text
+
+
 def get_ai_response(user_input: str, image_data: Optional[str] = None, chat_history: list = None) -> str:
     try:
         # Get FAST MCP instance
@@ -1186,6 +1237,9 @@ Please let me know if you have any SEO tool related questions?"""
 
         # Call Ollama API
         response_text = call_ollama_api(prompt, image_data)
+
+        # Remove ALL email addresses from the response
+        response_text = remove_email_from_response(user_input, response_text)
 
         # Fix alphanumeric spacing FIRST (before other processing)
         # Protect ticket numbers
@@ -1290,50 +1344,14 @@ async def read_root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
-@app.post("/api/check-idle")
-async def check_idle():
-    """Check if the chat has been idle for 10 minutes"""
-    current_time = datetime.now()
-    last_activity = session_state.get("last_activity_time", current_time)
-    idle_message_sent = session_state.get("idle_message_sent", False)
-    
-    # Calculate idle time in seconds
-    idle_duration = (current_time - last_activity).total_seconds()
-    
-    # If idle for more than 10 minutes (600 seconds) and haven't sent message yet
-    if idle_duration > 600 and not idle_message_sent:
-        session_state["idle_message_sent"] = True
-        
-        idle_response = "Hopefully your query is resolved, hence closing this chat. Thank you for using Novarsis Support!"
-        
-        # Add the idle message to chat history
-        bot_message = {
-            "role": "assistant",
-            "content": idle_response,
-            "timestamp": datetime.now(),
-            "show_feedback": False,
-            "is_idle_message": True
-        }
-        session_state["chat_history"].append(bot_message)
-        
-        return {
-            "idle": True,
-            "message": idle_response,
-            "idle_duration": idle_duration
-        }
-    
-    return {
-        "idle": False,
-        "idle_duration": idle_duration
-    }
-
-
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
-    # Update last activity time and reset idle flag
-    session_state["last_activity_time"] = datetime.now()
-    session_state["idle_message_sent"] = False
+    # Check if request is from mobile
+    is_mobile = request.platform == "mobile"
     
+    # Add mobile context to session if mobile
+    if is_mobile:
+        session_state["platform"] = "mobile"
     # Check if the user is responding to "Have I solved your query?"
     if session_state.get("last_bot_message_ends_with_query_solved"):
         if request.message.lower() in ["no", "nope", "not really", "not yet"]:
@@ -1385,7 +1403,16 @@ async def chat(request: ChatRequest):
         if ticket_id.startswith("NVS") and len(ticket_id) > 3:
             if ticket_id in session_state["support_tickets"]:
                 ticket = session_state["support_tickets"][ticket_id]
-                response = f"""Ticket Details:
+                # Mobile-optimized response
+                if session_state.get("platform") == "mobile":
+                    response = f"""🎫 {ticket_id}
+✅ {ticket['status']}
+🔔 {ticket['priority']} Priority
+
+We're working on it!"""
+                else:
+                    response = f"""🎫 Ticket Details:
+
 Ticket ID: {ticket_id}
 Status: {ticket['status']}
 Priority: {ticket['priority']}
@@ -1454,7 +1481,14 @@ Our team is working on your issue. You'll receive a notification when there's an
     session_state["chat_history"].append(bot_message)
 
     # Don't send suggestions with response anymore since we're doing real-time
-    return {"response": response, "show_feedback": show_feedback}
+    # Mobile-optimized response with additional metadata
+    return {
+        "response": response,
+        "show_feedback": show_feedback,
+        "response_type": "text",  # Can be text, card, list, etc.
+        "quick_actions": get_mobile_quick_actions(response),  # Quick action buttons for mobile
+        "timestamp": datetime.now().isoformat()
+    }
 
 
 @app.post("/api/check-ticket-status")
@@ -1480,11 +1514,29 @@ async def connect_expert():
             "query": session_state["last_user_query"],
             "timestamp": datetime.now()
         })
-        response = f"""I've created a priority support ticket for you:
-Ticket ID: {ticket_id}
-Status: Escalated to Human Support
-Response Time: Within 15 minutes
-Our expert team has been notified and will reach out to you shortly
+        # Mobile-optimized response
+        if session_state.get("platform") == "mobile":
+            response = f"""✅ Ticket created!
+
+🎫 {ticket_id}
+⏱️ Response in 15 mins
+
+We'll contact you via:
+• In-app chat
+• WhatsApp
+• Email"""
+        else:
+            response = f"""I've created a priority support ticket for you:
+
+🎫 Ticket ID: {ticket_id}
+📱 Status: Escalated to Human Support
+⏱️ Response Time: Within 15 minutes
+
+Our expert team has been notified and will reach out to you shortly via:
+• In-app chat
+• Email to your registered address
+• WhatsApp: {WHATSAPP_NUMBER}
+
 You can check your ticket status anytime by typing 'ticket {ticket_id}'"""
     else:
         response = "I'd be happy to connect you with an expert. Please first send your query so I can create a support ticket for you."
@@ -1504,15 +1556,33 @@ You can check your ticket status anytime by typing 'ticket {ticket_id}'"""
 async def feedback(request: FeedbackRequest):
     if request.feedback == "no":
         ticket_id = save_unresolved_query(session_state["current_query"])
-        response = f"""I understand this didn't fully resolve your issue. I've created a priority support ticket for you:
-Ticket ID: {ticket_id}
-Status: Escalated to Human Support
-Response Time: Within 15 minutes
-Our expert team has been notified and will reach out to you shortly
+        # Mobile-optimized response
+        if session_state.get("platform") == "mobile":
+            response = f"""Got it! Created ticket:
+
+🎫 {ticket_id}
+⏱️ Expert will help in 15 mins
+
+Check status anytime!"""
+        else:
+            response = f"""I understand this didn't fully resolve your issue. I've created a priority support ticket for you:
+
+🎫 Ticket ID: {ticket_id}
+📱 Status: Escalated to Human Support
+⏱️ Response Time: Within 15 minutes
+
+Our expert team has been notified and will reach out to you shortly via:
+• In-app chat
+• Email to your registered address
+• WhatsApp: {WHATSAPP_NUMBER}
+
 You can check your ticket status anytime by typing 'ticket {ticket_id}'"""
         session_state["resolved_count"] -= 1
     else:
-        response = "Great! I'm glad I could help. Feel free to ask if you have any more questions about Novarsis! 🚀"
+        if session_state.get("platform") == "mobile":
+            response = "Great! Happy to help! 😊"
+        else:
+            response = "Great! I'm glad I could help. Feel free to ask if you have any more questions about Novarsis! 🚀"
         session_state["resolved_count"] += 1
 
     bot_message = {
@@ -1544,6 +1614,97 @@ async def upload_file(file: UploadFile = File(...)):
 @app.get("/api/chat-history")
 async def get_chat_history():
     return {"chat_history": session_state["chat_history"]}
+
+@app.post("/api/mobile/chat")
+async def mobile_chat(request: ChatRequest):
+    """Mobile-specific chat endpoint with optimized responses"""
+    request.platform = "mobile"  # Force mobile platform
+    
+    # Process the chat request
+    response = await chat(request)
+    
+    # Format response for mobile
+    mobile_response = {
+        "status": "success",
+        "data": {
+            "message": response["response"],
+            "message_id": f"msg_{datetime.now().timestamp()}",
+            "timestamp": response["timestamp"],
+            "type": response["response_type"],
+            "quick_actions": response.get("quick_actions", []),
+            "suggestions": get_context_suggestions(request.message)[:3],  # Max 3 for mobile
+            "metadata": {
+                "show_feedback": response["show_feedback"],
+                "requires_action": bool(response.get("quick_actions")),
+                "session_id": session_state.get("session_id", "default")
+            }
+        }
+    }
+    
+    return mobile_response
+
+@app.get("/api/mobile/suggestions")
+async def get_mobile_suggestions():
+    """Get mobile-optimized suggestions"""
+    return {
+        "status": "success",
+        "data": {
+            "suggestions": [
+                {"text": "🔍 Check SEO Score", "id": "seo_check"},
+                {"text": "💳 View Plans", "id": "view_plans"},
+                {"text": "📋 My Tickets", "id": "tickets"},
+                {"text": "💬 Expert Help", "id": "expert"}
+            ]
+        }
+    }
+
+@app.post("/api/mobile/quick-action")
+async def handle_quick_action(request: dict):
+    """Handle quick action button clicks from mobile"""
+    action = request.get("action", "")
+    
+    if action == "view_ticket":
+        # Return ticket details
+        return {
+            "status": "success",
+            "data": {
+                "action": "navigate",
+                "screen": "tickets",
+                "params": {"filter": "active"}
+            }
+        }
+    elif action == "call_support":
+        return {
+            "status": "success",
+            "data": {
+                "action": "call",
+                "number": WHATSAPP_NUMBER
+            }
+        }
+    elif action == "view_report":
+        return {
+            "status": "success",
+            "data": {
+                "action": "navigate",
+                "screen": "reports"
+            }
+        }
+    elif action == "upgrade_plan":
+        return {
+            "status": "success",
+            "data": {
+                "action": "navigate",
+                "screen": "pricing",
+                "params": {"highlight": "pro"}
+            }
+        }
+    else:
+        return {
+            "status": "success",
+            "data": {
+                "action": "continue_chat"
+            }
+        }
 
 
 @app.get("/api/suggestions")
@@ -2093,64 +2254,6 @@ with open("templates/index.html", "w") as f:
             return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
         }
 
-        // Idle check variables
-        let idleCheckInterval;
-        let chatClosed = false;
-
-        // Function to check idle status
-        async function checkIdleStatus() {
-            if (chatClosed) {
-                // Stop checking if chat is already closed
-                clearInterval(idleCheckInterval);
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/check-idle', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
-                });
-
-                const data = await response.json();
-
-                if (data.idle) {
-                    // Chat has been idle for 10 minutes
-                    chatClosed = true;
-                    
-                    // Add the idle message to chat
-                    addMessage('assistant', data.message, false);
-                    
-                    // Disable input and buttons
-                    document.getElementById('message-input').disabled = true;
-                    document.getElementById('message-input').placeholder = 'Chat has been closed due to inactivity';
-                    document.getElementById('message-form').querySelectorAll('button').forEach(btn => {
-                        btn.disabled = true;
-                    });
-                    
-                    // Clear suggestions
-                    updateSuggestions([]);
-                    
-                    // Stop the interval
-                    clearInterval(idleCheckInterval);
-                }
-            } catch (error) {
-                console.error('Error checking idle status:', error);
-            }
-        }
-
-        // Start idle checking every 30 seconds
-        function startIdleChecking() {
-            // Clear any existing interval
-            if (idleCheckInterval) {
-                clearInterval(idleCheckInterval);
-            }
-            
-            // Start new interval to check every 30 seconds
-            idleCheckInterval = setInterval(checkIdleStatus, 30000);
-        }
-
         // Current time for welcome message
         document.addEventListener('DOMContentLoaded', function() {
             // Set current time for initial greeting
@@ -2161,9 +2264,6 @@ with open("templates/index.html", "w") as f:
 
             // Load initial suggestions
             loadInitialSuggestions();
-            
-            // Start idle checking
-            startIdleChecking();
         });
 
         // Chat container
@@ -2341,14 +2441,6 @@ with open("templates/index.html", "w") as f:
 
         // Send message
         async function sendMessage(message, imageData = null) {
-            // Don't send if chat is closed
-            if (chatClosed) {
-                return;
-            }
-            
-            // Restart idle checking timer on user activity
-            startIdleChecking();
-            
             // Handle special commands
             if (message.toLowerCase() === 'check ticket status') {
                 // Clear suggestions
