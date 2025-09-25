@@ -50,6 +50,35 @@ SUPPORT_EMAIL = "support@novarsis.tech"
 # Enhanced System Prompt - MOBILE APP OPTIMIZED
 SYSTEM_PROMPT = """You are Nova, the official AI support assistant for Novarsis AIO SEO Tool Mobile App.
 
+IMAGE ANALYSIS CAPABILITIES:
+When a user attaches an image containing SEO errors or issues:
+1. Analyze the screenshot/image for SEO-related errors
+2. Identify specific error messages, codes, or issues shown
+3. Provide clear explanations for each error
+4. Suggest step-by-step solutions to fix the errors
+5. Common SEO errors to look for:
+   - Missing meta tags
+   - Title/description length issues
+   - H1/heading structure problems
+   - Alt text missing
+   - Broken links (404 errors)
+   - Redirect chains
+   - Duplicate content warnings
+   - Page speed issues
+   - Mobile optimization errors
+   - Schema markup errors
+   - Canonical URL issues
+   - XML sitemap errors
+   - Robots.txt issues
+   - SSL certificate errors
+   - Core Web Vitals issues
+
+When analyzing error images:
+- Be specific about what error you see
+- Explain what the error means in simple terms
+- Provide actionable solutions
+- Offer to create a ticket if the error is complex
+
 IMPORTANT: You are responding in a MOBILE APP environment. Keep responses:
 - SHORT and CONCISE (max 2-3 paragraphs)
 - Use mobile-friendly formatting (short lines, clear breaks)
@@ -580,7 +609,7 @@ def get_intro_response() -> str:
 
 
 def call_ollama_api(prompt: str, image_data: Optional[str] = None) -> str:
-    """Call Ollama API with the prompt - supports both local and hosted Ollama"""
+    """Call Ollama API with the prompt - supports both local and hosted Ollama with image analysis"""
     try:
         # Check if using hosted service with API key
         if OLLAMA_API_KEY and USE_HOSTED_OLLAMA:
@@ -596,10 +625,22 @@ def call_ollama_api(prompt: str, image_data: Optional[str] = None) -> str:
 
         # Try different API formats based on service type
         if USE_HOSTED_OLLAMA:
-            # Hosted service uses OpenAI compatible endpoint
+            # For hosted service with image data
+            if image_data:
+                # Include image in the message for vision-capable models
+                messages = [{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}}
+                    ]
+                }]
+            else:
+                messages = [{"role": "user", "content": prompt}]
+            
             data = {
                 "model": OLLAMA_MODEL,
-                "messages": [{"role": "user", "content": prompt}],
+                "messages": messages,
                 "stream": False,
                 "temperature": 0.7
             }
@@ -613,7 +654,7 @@ def call_ollama_api(prompt: str, image_data: Optional[str] = None) -> str:
             }
             endpoint = f"{OLLAMA_BASE_URL}/api/generate"
 
-        # If there's image data, include it (for vision models)
+        # If there's image data for local Ollama, include it
         if image_data and not USE_HOSTED_OLLAMA:
             data["images"] = [image_data]
 
@@ -1229,9 +1270,20 @@ Please let me know if you have any SEO tool related questions?"""
         elif mcp.conversation_state["emotional_tone"] == "frustrated":
             enhanced_prompt += "\n[User is frustrated - be extra helpful and empathetic]"
 
-        # Create the full prompt
+        # Create the full prompt with special handling for images
         if image_data:
-            prompt = f"{enhanced_prompt}\n\n{context}\n\nUser query with screenshot: {user_input}"
+            # Enhanced prompt for image analysis
+            image_analysis_prompt = """\n\nIMPORTANT: The user has attached an image containing SEO-related errors.
+            Please analyze the image and:
+            1. Identify all visible SEO errors or issues
+            2. Explain each error clearly
+            3. Provide specific solutions for each error
+            4. Format your response with clear sections for each error found
+            5. If you cannot identify specific errors, ask the user to describe what error they're seeing
+            
+            Remember to be specific and actionable in your response."""
+            
+            prompt = f"{enhanced_prompt}{image_analysis_prompt}\n\n{context}\n\nUser query with SEO error screenshot: {user_input}\n\n[Image is attached - analyze it for SEO errors and provide solutions]"
         else:
             prompt = f"{enhanced_prompt}\n\n{context}\n\nUser query: {user_input}"
 
@@ -1348,6 +1400,15 @@ async def read_root(request: Request):
 async def chat(request: ChatRequest):
     # Check if request is from mobile
     is_mobile = request.platform == "mobile"
+    
+    # Special handling for image attachments with SEO errors
+    if request.image_data:
+        # If user hasn't provided context, add a default message for SEO error analysis
+        if not request.message or request.message.strip() == "":
+            request.message = "Please analyze this SEO error screenshot and help me fix the issues."
+        elif len(request.message.strip()) < 20 and "error" not in request.message.lower():
+            # If message is too short and doesn't mention error, enhance it
+            request.message = f"{request.message}. This screenshot shows SEO errors I'm encountering. Please help me understand and fix them."
     
     # Add mobile context to session if mobile
     if is_mobile:
@@ -1601,14 +1662,17 @@ async def upload_file(file: UploadFile = File(...)):
     if not file:
         raise HTTPException(status_code=400, detail="No file uploaded")
 
-    if file.content_type not in ["image/jpeg", "image/jpg", "image/png"]:
-        raise HTTPException(status_code=400, detail="Only JPG, JPEG, and PNG files are allowed")
+    if file.content_type not in ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]:
+        raise HTTPException(status_code=400, detail="Only image files (JPG, JPEG, PNG, GIF, WEBP) are allowed")
 
     # Read file and convert to base64
     contents = await file.read()
     base64_image = base64.b64encode(contents).decode('utf-8')
+    
+    # Log that an image with potential SEO errors was uploaded
+    logger.info(f"Image uploaded for SEO error analysis: {file.filename}")
 
-    return {"image_data": base64_image, "filename": file.filename}
+    return {"image_data": base64_image, "filename": file.filename, "content_type": file.content_type}
 
 
 @app.get("/api/chat-history")
@@ -2231,7 +2295,7 @@ with open("templates/index.html", "w") as f:
             </div>
 
             <form class="message-form" id="message-form">
-                <input type="file" id="file-input" class="file-input" accept="image/jpeg,image/jpg,image/png">
+                <input type="file" id="file-input" class="file-input" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp">
                 <button type="button" class="attachment-btn" id="attachment-btn">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1 -1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z" fill="currentColor"/>
