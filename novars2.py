@@ -85,6 +85,34 @@ When analyzing error images:
 - Explain what the error means in simple terms
 - Provide actionable solutions
 
+IMAGE ANALYSIS CAPABILITIES:
+When a user attaches an image containing SEO errors or issues:
+1. Analyze the screenshot/image for SEO-related errors
+2. Identify specific error messages, codes, or issues shown
+3. Provide clear explanations for each error
+4. Suggest step-by-step solutions to fix the errors
+5. Common SEO errors to look for:
+   - Missing meta tags
+   - Title/description length issues
+   - H1/heading structure problems
+   - Alt text missing
+   - Broken links (404 errors)
+   - Redirect chains
+   - Duplicate content warnings
+   - Page speed issues
+   - Mobile optimization errors
+   - Schema markup errors
+   - Canonical URL issues
+   - XML sitemap errors
+   - Robots.txt issues
+   - SSL certificate errors
+   - Core Web Vitals issues
+
+When analyzing error images:
+- Be specific about what error you see
+- Explain what the error means in simple terms
+- Provide actionable solutions
+
 IMPORTANT: You are responding in a MOBILE APP environment. Keep responses:
 - SHORT and CONCISE (max 2-3 paragraphs)
 - Use mobile-friendly formatting (short lines, clear breaks)
@@ -1321,8 +1349,20 @@ def get_ai_response(user_input: str, image_data: Optional[str] = None, chat_hist
         # Check if we should apply Novarsis filter
         should_filter = mcp.should_filter_novarsis(user_input)
 
+        # Special handling for image attachments
+        if image_data:
+            # Check if the message is SEO-related or general error query
+            seo_image_keywords = ['error', 'seo', 'issue', 'problem', 'bug', 'fix', 'help', 'analyze', 'screenshot', 'tool', 'novarsis']
+            is_seo_related_image = any(keyword in user_input.lower() for keyword in seo_image_keywords)
+            
+            # If no context provided or it's clearly not SEO-related, filter it
+            if not is_seo_related_image and not any(keyword in user_input.lower() for keyword in NOVARSIS_KEYWORDS):
+                return """Sorry, I only help with the Novarsis SEO Tool.
+
+Please let me know if you have any SEO-related questions?"""
+
         # Only filter if MCP says we should
-        if should_filter and not is_novarsis_related(user_input):
+        elif should_filter and not is_novarsis_related(user_input):
             return """Sorry, I only help with Novarsis SEO Tool.
 
 Please let me know if you have any SEO tool related questions?"""
@@ -1342,15 +1382,30 @@ Please let me know if you have any SEO tool related questions?"""
             # Enhanced prompt for image analysis
             image_analysis_prompt = """\n\nIMPORTANT: The user has attached an image containing SEO-related errors.
             Please analyze the image and:
-            1. Identify all visible SEO errors or issues
-            2. Explain each error clearly
-            3. Provide specific solutions for each error
-            4. Format your response with clear sections for each error found
-            5. If you cannot identify specific errors, ask the user to describe what error they're seeing
+            1. Identify all visible SEO errors or issues shown in the screenshot
+            2. For each error, provide:
+               - The exact error message or issue type
+               - A clear explanation of what this error means
+               - Step-by-step instructions to fix the error
+            3. If multiple errors are visible, address each one separately
+            4. Use simple, non-technical language where possible
+            5. If you cannot identify specific SEO errors in the image, ask the user to describe what error they're experiencing
 
-            Remember to be specific and actionable in your response."""
+            Common SEO errors to look for in screenshots:
+            - Meta tag issues (missing, too long, too short)
+            - Heading structure problems (missing H1, multiple H1s)
+            - Missing alt text on images
+            - Page speed scores and issues
+            - Mobile usability errors
+            - 404 errors and broken links
+            - SSL/HTTPS warnings
+            - Schema markup errors
+            - Core Web Vitals metrics
+            - Duplicate content warnings
 
-            prompt = f"{enhanced_prompt}{image_analysis_prompt}\n\n{context}\n\nUser query with SEO error screenshot: {user_input}\n\n[Image is attached - analyze it for SEO errors and provide solutions]"
+            Format your response clearly with the error type as a header, followed by explanation and solution."""
+
+            prompt = f"{enhanced_prompt}{image_analysis_prompt}\n\n{context}\n\nUser query with SEO error screenshot: {user_input}\n\n[Analyze the attached image for SEO-related errors and provide detailed solutions]"
         else:
             prompt = f"{enhanced_prompt}\n\n{context}\n\nUser query: {user_input}"
 
@@ -1868,14 +1923,22 @@ async def chat(request: ChatRequest):
     # Check if request is from mobile
     is_mobile = request.platform == "mobile"
 
-    # Special handling for image attachments with SEO errors
+    # Special handling for image attachments
     if request.image_data:
-        # If user hasn't provided context, add a default message for SEO error analysis
+        # Check if this is likely an SEO-related screenshot
+        seo_keywords = ['error', 'seo', 'issue', 'problem', 'fix', 'help', 'analyze', 'tool', 'novarsis', 'website', 'meta', 'tag', 'speed', 'mobile']
+        
+        # If user hasn't provided context, check if it might be SEO-related
         if not request.message or request.message.strip() == "":
-            request.message = "Please analyze this SEO error screenshot and help me fix the issues."
-        elif len(request.message.strip()) < 20 and "error" not in request.message.lower():
-            # If message is too short and doesn't mention error, enhance it
-            request.message = f"{request.message}. This screenshot shows SEO errors I'm encountering. Please help me understand and fix them."
+            request.message = "Please analyze this screenshot."
+        elif len(request.message.strip()) < 20:
+            # If message is too short, check if it contains SEO keywords
+            if not any(keyword in request.message.lower() for keyword in seo_keywords):
+                # Could be non-SEO screenshot, let the AI determine
+                request.message = f"{request.message}. Please analyze this screenshot."
+            else:
+                # Likely SEO-related, enhance the message
+                request.message = f"{request.message}. This screenshot shows SEO-related issues. Please help me understand and fix them."
 
     # Add mobile context to session if mobile
     if is_mobile:
@@ -2035,10 +2098,16 @@ async def upload_file(file: UploadFile = File(...)):
     contents = await file.read()
     base64_image = base64.b64encode(contents).decode('utf-8')
 
-    # Log that an image with potential SEO errors was uploaded
-    logger.info(f"Image uploaded for SEO error analysis: {file.filename}")
+    # Log that an image was uploaded
+    logger.info(f"Image uploaded for analysis: {file.filename}")
 
-    return {"image_data": base64_image, "filename": file.filename, "content_type": file.content_type}
+    # Return with metadata for SEO error detection
+    return {
+        "image_data": base64_image, 
+        "filename": file.filename, 
+        "content_type": file.content_type,
+        "instructions": "Please attach this image and describe the SEO error you're seeing for best results."
+    }
 
 
 @app.get("/api/chat-history")
