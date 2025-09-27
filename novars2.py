@@ -31,7 +31,7 @@ app = FastAPI(title="Novarsis Support Center", description="AI Support Assistant
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY",
                            "14bfe5365cc246dc82d933e3af2aa5b6.hz2asqgJi2bO_gpN7Cp1Hcku")  # Empty default, will be set via environment
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "https://ollama.com")  # Default to hosted service
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "deepseek-v3.1:671b")  # Default model
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gpt-oss:120b")  # Default model
 USE_HOSTED_OLLAMA = True  # Always use hosted service
 
 # Initialize Ollama model
@@ -45,10 +45,17 @@ logger.info("Using keyword-based filtering (Ollama doesn't provide embedding API
 
 # Constants
 WHATSAPP_NUMBER = "+91-9999999999"
-SUPPORT_EMAIL = "support@novarsis.tech"
+SUPPORT_EMAIL = "support@novarsistech.com"
 
 # Enhanced System Prompt - MOBILE APP OPTIMIZED
-SYSTEM_PROMPT = """You are Nova, the official AI support assistant for Novarsis AIO SEO Tool Mobile App.
+SYSTEM_PROMPT = """You are Nova, an AI assistant for Novarsis SEO Tool. Your role is to help users with SEO analysis, reports, account issues, and technical support.
+
+IMPORTANT EMAIL RULES:
+- NEVER ask users for their email address
+- If a user voluntarily provides their email, acknowledge it properly
+- Do not request email for connecting with experts or support
+- Simply provide the support email (support@novarsistech.com) when needed
+- Never say things like "Could you share your email address?" or "Please provide your email"
 
 IMAGE ANALYSIS CAPABILITIES:
 When a user attaches an image containing SEO errors or issues:
@@ -77,7 +84,6 @@ When analyzing error images:
 - Be specific about what error you see
 - Explain what the error means in simple terms
 - Provide actionable solutions
-- Offer to create a ticket if the error is complex
 
 IMPORTANT: You are responding in a MOBILE APP environment. Keep responses:
 - SHORT and CONCISE (max 2-3 paragraphs)
@@ -127,17 +133,49 @@ RESPONSE STYLE (MOBILE OPTIMIZED):
 - When user greets with a problem (e.g., "hi, what are features?"), skip greeting and answer directly
 - Only greet back when user sends ONLY a greeting (like just "hi" or "hello")
 
-TICKET GENERATION RULES:
-- IMPORTANT: Only generate a ticket number when the user has agreed to have a ticket opened. When the user says 'yes' to your offer to open a ticket, then you must include a ticket number in format: NVS##### in your response.
-- Example: When the user says 'yes' to your offer, respond: 'I've opened a support ticket for you. Ticket Number: NVS[RANDOM_5_DIGIT]. The ticket is now in progress, and an expert will reach out shortly.'
-- Always format as 'Ticket Number: NVS#####' or 'Ticket ID: NVS#####' with the ticket number on the same line (no line breaks)
-- Generate a RANDOM 5-digit number after NVS (e.g., NVS73534, NVS89421, NVS45678). NEVER use NVS12345 as it's just an example.
-- When mentioning ticket status, always include the ticket number
-- CRITICAL: The ticket number must always be a continuous string without any line breaks or spaces in the middle (e.g., NVS73534, not NVS\n73534 or NVS 73534)
+CONTACT INFORMATION:
+- When user says 'No' to "Have I resolved your query?", provide contact details:
+  Contact Us:
+  support@novarsistech.com
+- Never use the phrase "For more information, please contact us on support@novarsistech.com"
+- IMPORTANT: Always write emails correctly without spaces. The support email is: support@novarsistech.com (no spaces)
+- When acknowledging user emails, write them correctly without spaces and preserve exact format (e.g., user@gmail.com not user@gmail. com or user@gmail. Com)
+- CRITICAL EMAIL FORMAT: Always write emails as username@domain.com (all lowercase .com, no spaces)
+- NEVER write emails as username@domain. Com (space and capital C is wrong)
+- NEVER capitalize domain extensions (.Com, .Net, .Org are wrong - use .com, .net, .org)
+- NEVER concatenate words with email addresses (e.g., "emailwdsjkd@gmail.com" is wrong, should be "wdsjkd@gmail.com")
+- Always preserve the exact email format provided by user
+- CRITICAL: When user provides an email like "wdsjkd@gmail.com", acknowledge it EXACTLY as "wdsjkd@gmail.com" - do NOT change it to "emaild@gmail.com" or any other variation
+- When mentioning user's email in response, use the EXACT email they provided without any modifications
+- Example: If user says "wdsjkd@gmail.com please check my account", respond with "Thanks for sharing your email wdsjkd@gmail.com" (not "emaild@gmail.com")
+
+WEBSITE/DOMAIN FORMATTING RULES:
+- CRITICAL: Always write domain names correctly without spaces (example.com, not example. com)
+- NEVER write domains with spaces before extensions (knittingknot. Com is WRONG - use knittingknot.com)
+- NEVER capitalize domain extensions (.Com is wrong - use .com)
+- When user provides a website like "knittingknot.com", always refer to it EXACTLY as "knittingknot.com"
+- Never add spaces in domain names: website.com ✓, website. com ✗, website.Com ✗
+- Preserve exact domain formatting from user input
+- IMPORTANT: When instructing to enter a website, write it as "enter knittingknot.com" NOT "enter knittingknot. Com"
+- Always double-check domain formatting before sending response
+- Examples of CORRECT formatting:
+  * "enter knittingknot.com and tap Start"
+  * "add example.com to the audit"
+  * "visit website.org for more info"
+- Examples of WRONG formatting:
+  * "enter knittingknot. Com" (space before extension)
+  * "add example.Com" (capital extension)
+  * "visit website . org" (spaces around dot)
 
 SPECIAL INSTRUCTIONS:
-1. If the user asks for SEO analysis of a website, do not perform the analysis. Instead, guide them on how to do it in the Novarsis tool and offer to raise a ticket if they face issues.
-2. IMPORTANT: When user asks about features of the tool, ONLY list the features. DO NOT mention pricing plans unless specifically asked about pricing, plans, or costs. Features include:
+1. If user asks to connect with an expert or specialist:
+   - DO NOT ask for their email address
+   - Simply respond: "I'll forward your request to our SEO experts. They'll review your query and reach out through the appropriate channel."
+   - Or provide: "Our experts can help you. Please contact: support@novarsistech.com" (NOT support@support@novarsistech.com)
+   - NEVER write the email as support@support@ - always write it as support@novarsistech.com
+   - NEVER say "Could you share your email address?" or similar
+2. If the user asks for SEO analysis of a website, do not perform the analysis. Instead, guide them on how to do it in the Novarsis tool and provide general troubleshooting steps if they face issues.
+3. IMPORTANT: When user asks about features of the tool, ONLY list the features. DO NOT mention pricing plans unless specifically asked about pricing, plans, or costs. Features include:
    ✓ Site audits & issue detection
    ✓ Keyword research & tracking
    ✓ Competitor analysis
@@ -146,14 +184,14 @@ SPECIAL INSTRUCTIONS:
    ✓ Rank tracking
    ✓ Custom reports
    ✓ Mobile optimization
-3. When comparing pricing plans (ONLY when asked about pricing/plans/costs), use MOBILE-FRIENDLY format:
+4. When comparing pricing plans (ONLY when asked about pricing/plans/costs), use MOBILE-FRIENDLY format:
 
 📱 **Free Plan**
 • 5 websites
 • All SEO tools
 • $0/month
 
-💼 **Pro Plan** 
+💼 **Pro Plan**
 • 50 websites
 • Priority support
 • $49/month
@@ -163,22 +201,22 @@ SPECIAL INSTRUCTIONS:
 • Dedicated manager
 • Custom pricing
 
-Would you like me to connect with an expert for the Enterprise model?
-
-4. If the user mentions multiple problems, address each one in your response.
-5. At the end of your response, if you feel the answer might be incomplete or the user might need more help, ask: "Have I solved your query?" If the user says no, then offer to connect with an expert and create a support ticket.
-6. IMPORTANT: Never ask more than one question in a single response. This means:
-   - If you have already asked a question (like the enterprise model question or an offer to open a ticket), do not ask 'Have I solved your query?' in the same response.
-   - If you are going to ask 'Have I solved your query?', do not ask any other question in the same response.
-7. If the user provides an email address, acknowledge it and continue the conversation. Do not restart the chat.
-8. GREETING RULES:
+5. If the user mentions multiple problems, address each one in your response.
+6. At the end of your response, if you feel the answer might be incomplete or the user might need more help, ask: "Have I resolved your query?" If the user says no, then provide contact information:
+   Contact Us:
+   support@novarsistech.com
+7. IMPORTANT: Never ask more than one question in a single response. This means:
+   - If you have already asked a question (like an offer to contact support), do not ask 'Have I resolved your query?' in the same response.
+   - If you are going to ask 'Have I resolved your query?', do not ask any other question in the same response.
+8. If the user provides an email address, acknowledge it and continue the conversation. Do not restart the chat.
+9. GREETING RULES:
    - If user says ONLY "hi", "hello", "hey" (single greeting), respond with: "Hello! I'm Nova, your personal assistant. How can I help you today?"
    - If user says greeting + problem (e.g., "hi, what are the features?"), SKIP the greeting and directly address the problem
    - Never start with a greeting when the user has already asked a question with their greeting
-9. When offering to create a support ticket, use the phrase: "For more information, Shall I raise a support ticket for you?" instead of other variations. This question should always appear on a new line.
-10. IMPORTANT: When you indicate that the issue is being handled by the team (e.g., "Our team will review", "get back to you", "working on your issue"), do NOT ask "Have I solved your query?" because the issue is not yet resolved.
-11. When asked about features, NEVER include pricing information unless explicitly asked. Only list the tool's features.
-12. IMPORTANT: When a user provides an email address, do NOT repeat or display ANY email address in your response. Simply acknowledge receipt without showing the email.
+10. Never use the phrase "For more information, please contact us on" - instead just provide the email when needed as "Contact Us: support@novarsistech.com"
+11. IMPORTANT: When you indicate that the issue is being handled by the team (e.g., "Our team will review", "get back to you", "working on your issue"), do NOT ask "Have I resolved your query?" because the issue is not yet resolved.
+12. When asked about features, NEVER include pricing information unless explicitly asked. Only list the tool's features.
+13. When a user provides an email address voluntarily, you may acknowledge it, but NEVER ask for email addresses.
 """
 
 # Context-based quick reply suggestions
@@ -188,9 +226,7 @@ QUICK_REPLY_SUGGESTIONS = {
         "Check my subscription status",
         "I'm getting an error message",
         "Generate SEO report",
-        "Compare pricing plans",
-        "Check ticket status",
-        "Connect with an Expert"
+        "Compare pricing plans"
     ],
     "seo_analysis": [
         "How to improve my SEO score?",
@@ -211,8 +247,7 @@ QUICK_REPLY_SUGGESTIONS = {
         "Report not generating",
         "Login issues",
         "Data sync problems",
-        "Browser compatibility",
-        "Connect with an Expert"
+        "Browser compatibility"
     ],
     "report": [
         "Schedule automatic reports",
@@ -226,8 +261,7 @@ QUICK_REPLY_SUGGESTIONS = {
         "Analysis stuck at 0%",
         "404 error on dashboard",
         "Payment failed",
-        "Can't access reports",
-        "Connect with an Expert"
+        "Can't access reports"
     ],
     "pricing": [
         "What's included in Premium?",
@@ -242,25 +276,22 @@ QUICK_REPLY_SUGGESTIONS = {
 def get_mobile_quick_actions(response: str) -> list:
     """Get mobile-optimized quick action buttons based on response."""
     actions = []
-    
-    # Check response content for relevant actions
-    if "ticket" in response.lower() and "NVS" in response:
-        actions.append({"text": "📋 View Ticket", "action": "view_ticket"})
-    
-    if "expert" in response.lower() or "support" in response.lower():
+
+    if "support" in response.lower():
         actions.append({"text": "📞 Call Support", "action": "call_support"})
-        
+
     if "report" in response.lower():
         actions.append({"text": "📊 View Report", "action": "view_report"})
-        
+
     if "upgrade" in response.lower() or "plan" in response.lower():
         actions.append({"text": "⬆️ Upgrade Plan", "action": "upgrade_plan"})
-    
+
     # Always include help option
     if len(actions) < 3:
         actions.append({"text": "💬 Chat More", "action": "continue_chat"})
-    
+
     return actions[:3]  # Max 3 actions for mobile UI
+
 
 def get_context_suggestions(message: str) -> list:
     """Get relevant quick reply suggestions based on user's input context - MOBILE OPTIMIZED."""
@@ -274,13 +305,8 @@ def get_context_suggestions(message: str) -> list:
     if len(message_lower) < 3:
         return []
 
-    # Check for specific actions first - Mobile optimized (max 3 suggestions)
-    if any(word in message_lower for word in ['ticket', 'status', 'track', 'nvs']):
-        return ["📋 Check ticket", "💬 Expert help", "📞 Call support"]
-    elif any(word in message_lower for word in ['expert', 'human', 'agent', 'support', 'help']):
-        return ["💬 Expert help", "📋 Check ticket", "📞 Call support"]
     # Check for keywords and return appropriate suggestions
-    elif any(
+    if any(
             word in message_lower for word in ['seo', 'analysis', 'analyze', 'score', 'optimization', 'meta', 'crawl']):
         return QUICK_REPLY_SUGGESTIONS["seo_analysis"][:3]  # Max 3 for mobile
     elif any(word in message_lower for word in
@@ -499,8 +525,6 @@ fast_mcp = FastMCP()
 # Global session state (in a real app, you'd use Redis or a database)
 session_state = {
     "chat_history": [],
-    "unresolved_queries": [],
-    "support_tickets": {},
     "current_plan": None,
     "current_query": {},
     "typing": False,
@@ -509,7 +533,6 @@ session_state = {
     "resolved_count": 0,
     "pending_input": None,
     "uploaded_file": None,
-    "checking_ticket_status": False,
     "intro_given": False,
     "last_user_query": "",
     "fast_mcp": fast_mcp,  # Add FAST MCP to session
@@ -539,10 +562,6 @@ class ChatRequest(BaseModel):
     image_data: Optional[str] = None
     platform: str = "mobile"  # Added platform identifier
     device_info: Optional[Dict] = None  # Device info for better responses
-
-
-class TicketStatusRequest(BaseModel):
-    ticket_id: str
 
 
 class FeedbackRequest(BaseModel):
@@ -637,7 +656,7 @@ def call_ollama_api(prompt: str, image_data: Optional[str] = None) -> str:
                 }]
             else:
                 messages = [{"role": "user", "content": prompt}]
-            
+
             data = {
                 "model": OLLAMA_MODEL,
                 "messages": messages,
@@ -711,11 +730,7 @@ def format_pricing_plans(text: str) -> str:
         # Extract the pricing section
         pricing_start = text.find("Free Plan:")
         if pricing_start != -1:
-            # Find the end of the pricing section (before the question about connecting with expert)
-            pricing_end = text.find("Would you like me to connect with an expert for the Enterprise model?")
-            if pricing_end == -1:
-                pricing_end = len(text)
-
+            pricing_end = len(text)
             pricing_section = text[pricing_start:pricing_end]
 
             # Replace the pricing section with properly formatted one
@@ -748,30 +763,23 @@ Unlimited websites (custom limits)
 
 def remove_duplicate_questions(text: str) -> str:
     """Remove duplicate questions to ensure only one question appears at the end"""
-    # Check if the response contains the enterprise model question
-    if "Would you like me to connect with an expert for the Enterprise model?" in text:
-        # Remove "Have I solved your query?" if it appears after the enterprise model question
-        enterprise_question_pos = text.find("Would you like me to connect with an expert for the Enterprise model?")
-        query_solved_pos = text.find("Have I solved your query?")
 
-        if query_solved_pos > enterprise_question_pos:
-            # Remove the "Have I solved your query?" part
-            text = text[:query_solved_pos].strip()
+    # Remove the "For more information" phrase completely
+    text = re.sub(r'For more information[,.]?\s*please contact us on\s*', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'For more information[,.]?\s*contact us at\s*', '', text, flags=re.IGNORECASE)
 
-    # Check for ticket offer questions and remove "Have I solved your query?" if it appears
-    ticket_offer_patterns = [
-        r"For more information, Shall I raise a support ticket for you",
-        r"Would you like me to open a ticket",
-        r"Should I create a ticket",
-        r"Do you want me to generate a ticket",
-        r"Would you like me to create a support ticket"
+    # Check for escalation/contact instructions and remove "Have I resolved your query?" if it appears
+    escalation_patterns = [
+        r"please contact us",
+        r"contact us at",
+        r"reach out to us"
     ]
 
-    for pattern in ticket_offer_patterns:
+    for pattern in escalation_patterns:
         if re.search(pattern, text, re.IGNORECASE):
-            query_solved_pos = text.find("Have I solved your query?")
+            query_solved_pos = text.find("Have I resolved your query?")
             if query_solved_pos != -1:
-                # Remove the "Have I solved your query?" part
+                # Remove the "Have I resolved your query?" part
                 text = text[:query_solved_pos].strip()
             break
 
@@ -788,66 +796,22 @@ def remove_duplicate_questions(text: str) -> str:
 
     for pattern in team_handling_patterns:
         if re.search(pattern, text, re.IGNORECASE):
-            query_solved_pos = text.find("Have I solved your query?")
+            query_solved_pos = text.find("Have I resolved your query?")
             if query_solved_pos != -1:
-                # Remove the "Have I solved your query?" part
+                # Remove the "Have I resolved your query?" part
                 text = text[:query_solved_pos].strip()
             break
 
     return text
 
 
-def fix_ticket_number_formatting(text: str) -> str:
-    """Fix ticket number formatting to ensure it appears on one line"""
-    # Fix any ticket numbers that might have been split by newlines or spaces
-    text = re.sub(r'Ticket Number:\s*NVS\s*([\d\s]+)',
-                  lambda m: f'Ticket Number: NVS{m.group(1).replace(" ", "").replace("\n", "")}', text)
-    text = re.sub(r'Ticket ID:\s*NVS\s*([\d\s]+)',
-                  lambda m: f'Ticket ID: NVS{m.group(1).replace(" ", "").replace("\n", "")}', text)
-
-    # Fix standalone NVS numbers that might be split
-    text = re.sub(r'NVS\s+([\d]{5})', r'NVS\1', text)
-
-    # Ensure no line breaks within ticket numbers
-    text = re.sub(r'(Ticket (?:Number|ID):\s*)NVS\n([\d]+)', r'\1NVS\2', text)
-
-    return text
-
-
-def format_ticket_offer_question(text: str) -> str:
-    """Format the ticket offer question to appear on a new line"""
-    # Replace the ticket offer question with the formatted version
-    text = re.sub(r'For more information, Shall I raise a support ticket for you\?',
-                  r'\n\nFor more information, Shall I raise a support ticket for you?', text)
-
-    return text
-
-
-def generate_ticket_number() -> str:
-    """Generate a unique ticket number in format NVS#####"""
-    return f"NVS{random.randint(10000, 99999)}"
-
-
 def clean_response(text: str) -> str:
     """Clean and format the response text"""
-    # First fix any broken ticket numbers
-    text = fix_ticket_number_formatting(text)
-
     # Format pricing plans if present
     text = format_pricing_plans(text)
 
     # Remove duplicate questions
     text = remove_duplicate_questions(text)
-
-    # Fix ticket number formatting again after other processing
-    text = fix_ticket_number_formatting(text)
-
-    # Format ticket offer question
-    text = format_ticket_offer_question(text)
-
-    # Final check: ensure no line breaks in ticket numbers
-    text = re.sub(r'(NVS)\s*\n\s*([\d]{5})', r'\1\2', text)
-    text = re.sub(r'(NVS)\s+([\d]{5})', r'\1\2', text)
 
     return text
 
@@ -1186,61 +1150,69 @@ def format_response_presentable(text: str) -> str:
     return text.strip()
 
 
-def extract_and_save_ticket_from_response(response_text: str, user_query: str) -> None:
-    """Extract ticket number from AI response and save it to session state"""
-    # Pattern to find ticket numbers in the response
-    ticket_patterns = [
-        r'Ticket Number:\s*(NVS\d{5})',
-        r'Ticket ID:\s*(NVS\d{5})',
-        r'ticket\s+(NVS\d{5})',
-        r'(NVS\d{5})'
+def fix_email_format(text: str) -> str:
+    """Fix email formatting issues in the response - COMPREHENSIVE FIX"""
+
+    # First, handle the double support@ issue specifically
+    text = re.sub(r'support@support@novarsistech\s*\.\s*[Cc]om', 'support@novarsistech.com', text, flags=re.IGNORECASE)
+
+    # Then, handle all other variations
+    # Using a more aggressive approach
+
+    # Pattern to match all variations of the email
+    # This will catch: supportnovarsistech. Com, supportnovarsistech.Com, etc.
+    email_patterns = [
+        # With or without @, with spaces around dot and Com/com
+        r'support(?:@)?\s*novarsistech\s*\.\s*[Cc]om',
+        # Without dot
+        r'support(?:@)?\s*novarsistech\s+[Cc]om',
+        # With multiple spaces
+        r'support\s+novarsistech\s*\.?\s*[Cc]om',
+        # Just the domain part when it appears alone
+        r'novarsistech\s*\.\s*[Cc]om',
+        # With tech separated
+        r'support(?:@)?\s*novarsis\s*tech\s*\.?\s*[Cc]om',
     ]
 
-    for pattern in ticket_patterns:
-        match = re.search(pattern, response_text, re.IGNORECASE)
-        if match:
-            ticket_id = match.group(1) if '(' in pattern else match.group(0).split(':')[-1].strip()
+    # Apply all patterns
+    for pattern in email_patterns:
+        text = re.sub(pattern, 'support@novarsistech.com', text, flags=re.IGNORECASE)
 
-            # Check if this is a valid ticket format
-            if re.match(r'^NVS\d{5}$', ticket_id):
-                # Save the ticket to session state
-                ticket_data = {
-                    'query': user_query,
-                    'timestamp': datetime.now(),
-                    'ticket_id': ticket_id,
-                    'status': 'In Progress',
-                    'priority': 'Normal'
-                }
+    # Special handling for when it appears in context
+    # "contact us on/at" followed by any email variation
+    text = re.sub(
+        r'(contact\s+us\s+(?:on|at)\s+)[a-z]*novarsis[a-z]*\s*\.?\s*[Cc]om\.?',
+        r'\1support@novarsistech.com',
+        text,
+        flags=re.IGNORECASE
+    )
 
-                # Add to support tickets if not already present
-                if ticket_id not in session_state["support_tickets"]:
-                    session_state["support_tickets"][ticket_id] = ticket_data
-                    logger.info(f"Saved ticket {ticket_id} to session state")
-                break
+    # "email us at" followed by any email variation
+    text = re.sub(
+        r'(email\s+us\s+at\s+)[a-z]*novarsis[a-z]*\s*\.?\s*[Cc]om\.?',
+        r'\1support@novarsistech.com',
+        text,
+        flags=re.IGNORECASE
+    )
 
+    # Handle if there's a period after .com (like ". Com.")
+    text = re.sub(r'support@novarsistech\.com\.', 'support@novarsistech.com.', text)
 
-def remove_email_from_response(original_input: str, response_text: str) -> str:
-    """Remove ALL email addresses from the response text, not just from user input"""
-    # Pattern to find any email address in the response
-    email_pattern = r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
-    
-    # Replace all email addresses with [email hidden]
-    response_text = re.sub(email_pattern, '[email hidden]', response_text)
-    
-    # Also handle cases where email might be partially displayed
-    # Pattern for text that looks like an email but might have spaces
-    partial_email_pattern = r"\b[A-Za-z0-9._%+-]+\s*@\s*[A-Za-z0-9.-]+\s*\.\s*[A-Z|a-z]{2,}\b"
-    response_text = re.sub(partial_email_pattern, '[email hidden]', response_text, flags=re.IGNORECASE)
-    
-    # Handle cases where the @ symbol might be replaced with 'at'
-    at_pattern = r"\b[A-Za-z0-9._%+-]+\s+at\s+[A-Za-z0-9.-]+\s*\.\s*[A-Z|a-z]{2,}\b"
-    response_text = re.sub(at_pattern, '[email hidden]', response_text, flags=re.IGNORECASE)
-    
-    # Clean up any double spaces that might have been left behind
-    response_text = re.sub(r'\s+', ' ', response_text)
-    response_text = re.sub(r'\s+([.,!?])', r'\1', response_text)  # Remove space before punctuation
-    
-    return response_text
+    # Final cleanup - remove any remaining malformed emails
+    # This is a catch-all for any we might have missed
+    if 'novarsistech' in text.lower() and '@' not in text[
+                                                     max(0, text.lower().find('novarsistech') - 10):text.lower().find(
+                                                         'novarsistech') + 30]:
+        # Find all occurrences and fix them
+        matches = list(re.finditer(r'\b[a-z]*novarsis[a-z]*\s*\.?\s*[Cc]om\b', text, re.IGNORECASE))
+        for match in reversed(matches):  # Process in reverse to maintain indices
+            start, end = match.span()
+            # Check if this looks like it should be an email
+            before_text = text[max(0, start - 20):start].lower()
+            if any(word in before_text for word in ['contact', 'email', 'at', 'on', 'us', 'support']):
+                text = text[:start] + 'support@novarsistech.com' + text[end:]
+
+    return text
 
 
 def get_ai_response(user_input: str, image_data: Optional[str] = None, chat_history: list = None) -> str:
@@ -1280,9 +1252,9 @@ Please let me know if you have any SEO tool related questions?"""
             3. Provide specific solutions for each error
             4. Format your response with clear sections for each error found
             5. If you cannot identify specific errors, ask the user to describe what error they're seeing
-            
+
             Remember to be specific and actionable in your response."""
-            
+
             prompt = f"{enhanced_prompt}{image_analysis_prompt}\n\n{context}\n\nUser query with SEO error screenshot: {user_input}\n\n[Image is attached - analyze it for SEO errors and provide solutions]"
         else:
             prompt = f"{enhanced_prompt}\n\n{context}\n\nUser query: {user_input}"
@@ -1290,25 +1262,236 @@ Please let me know if you have any SEO tool related questions?"""
         # Call Ollama API
         response_text = call_ollama_api(prompt, image_data)
 
-        # Remove ALL email addresses from the response
-        response_text = remove_email_from_response(user_input, response_text)
+        # Check if API returned an error
+        if "Error:" in response_text or "cannot connect" in response_text.lower():
+            logger.error(f"API Error in response: {response_text}")
+            # Return a more helpful message instead of the raw error
+            return "I'm having trouble connecting to the AI service right now. Please try again in a moment, or contact support@novarsistech.com for assistance."
 
-        # Fix alphanumeric spacing FIRST (before other processing)
-        # Protect ticket numbers
-        ticket_pattern = r'(NVS\d+)'
-        protected_tickets = {}
-        for match in re.finditer(ticket_pattern, response_text):
-            placeholder = f'__TICKET_{len(protected_tickets)}__'
-            protected_tickets[placeholder] = match.group()
+        # Debug: Print the response before processing
+        logger.info(f"Response received, length: {len(response_text)}")
+        
+        # ULTRA EARLY FIX: Fix domain spacing issues immediately after getting response
+        # This pattern catches "domain. Com" or "domain . Com" etc.
+        response_text = re.sub(r'([a-zA-Z0-9-]+)\s*\.\s+([Cc][Oo][Mm])\b', r'\1.com', response_text)
+        response_text = re.sub(r'([a-zA-Z0-9-]+)\s*\.\s+([Nn][Ee][Tt])\b', r'\1.net', response_text)
+        response_text = re.sub(r'([a-zA-Z0-9-]+)\s*\.\s+([Oo][Rr][Gg])\b', r'\1.org', response_text)
+        response_text = re.sub(r'([a-zA-Z0-9-]+)\s*\.\s+([Cc][Oo])\b', r'\1.co', response_text)
+        response_text = re.sub(r'([a-zA-Z0-9-]+)\s*\.\s+([Ii][Oo])\b', r'\1.io', response_text)
+        response_text = re.sub(r'([a-zA-Z0-9-]+)\s*\.\s+([Ii][Nn])\b', r'\1.in', response_text)
+        
+        # Fix capitalized extensions
+        response_text = response_text.replace('. Com', '.com')
+        response_text = response_text.replace('.Com', '.com')
+        response_text = response_text.replace('. NET', '.net')
+        response_text = response_text.replace('.NET', '.net')
+        response_text = response_text.replace('. ORG', '.org')
+        response_text = response_text.replace('.ORG', '.org')
+        
+        # Specific fix for the exact pattern you're seeing
+        response_text = response_text.replace('knittingknot. Com', 'knittingknot.com')
+        response_text = response_text.replace('knittingknot. com', 'knittingknot.com')
+        response_text = response_text.replace('knittingknot .com', 'knittingknot.com')
+        response_text = response_text.replace('knittingknot . com', 'knittingknot.com')
+
+        # CRITICAL: Fix ALL domain names and URLs (not just emails)
+        # Extract any URLs/domains from user input
+        url_pattern = r'(?:https?://)?(?:www\.)?([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,})'        
+        url_matches = re.findall(url_pattern, user_input, re.IGNORECASE)
+        
+        # Also look for simple domain patterns
+        simple_domain_pattern = r'\b([a-zA-Z0-9-]+\.[a-zA-Z]{2,})\b'
+        simple_matches = re.findall(simple_domain_pattern, user_input, re.IGNORECASE)
+        url_matches.extend(simple_matches)
+
+        # Fix each found domain in the response
+        for domain in url_matches:
+            # Clean the domain (lowercase, no spaces)
+            clean_domain = domain.lower().strip()
+
+            # Create all possible corrupted variations
+            domain_parts = clean_domain.split('.')
+            if len(domain_parts) >= 2:
+                domain_name = '.'.join(domain_parts[:-1])  # Everything except TLD
+                tld = domain_parts[-1]  # The TLD (com, net, org, etc.)
+
+                # Fix variations with space and capitalization
+                corrupted_domain_patterns = [
+                    # Domain with space before dot: "domain . com" or "domain .com"
+                    rf'{re.escape(domain_name)}\s+\.\s*{re.escape(tld)}',
+                    rf'{re.escape(domain_name)}\s*\.\s+{re.escape(tld)}',
+                    # Domain with capital TLD: "domain.Com"
+                    rf'{re.escape(domain_name)}\.{re.escape(tld.capitalize())}',
+                    # Domain with space and capital: "domain. Com" or "domain . Com"
+                    rf'{re.escape(domain_name)}\s*\.\s*{re.escape(tld.capitalize())}',
+                    # Any weird capitalization of the TLD
+                    rf'{re.escape(domain_name)}\s*\.\s*{re.escape(tld.upper())}',
+                    # Handle if domain name itself got capitalized
+                    rf'{re.escape(domain_name.capitalize())}\s*\.\s*{re.escape(tld)}',
+                    rf'{re.escape(domain_name.capitalize())}\s*\.\s*{re.escape(tld.capitalize())}',
+                ]
+
+                for pattern in corrupted_domain_patterns:
+                    response_text = re.sub(pattern, clean_domain, response_text, flags=re.IGNORECASE)
+
+        # Fix common domain extensions with spaces/capitals for ANY domain
+        # This catches domains not in user input too
+        response_text = re.sub(r'([a-zA-Z0-9-]+)\s+\.\s*([Cc][Oo][Mm])\b', r'\1.com', response_text)
+        response_text = re.sub(r'([a-zA-Z0-9-]+)\s+\.\s*([Nn][Ee][Tt])\b', r'\1.net', response_text)
+        response_text = re.sub(r'([a-zA-Z0-9-]+)\s+\.\s*([Oo][Rr][Gg])\b', r'\1.org', response_text)
+        response_text = re.sub(r'([a-zA-Z0-9-]+)\s+\.\s*([Ii][Oo])\b', r'\1.io', response_text)
+        response_text = re.sub(r'([a-zA-Z0-9-]+)\s+\.\s*([Cc][Oo])\b', r'\1.co', response_text)
+
+        # Fix domains ending with ". Com" (space + capital)
+        response_text = re.sub(r'([a-zA-Z0-9-]+)\s*\.\s*Com\b', r'\1.com', response_text)
+        response_text = re.sub(r'([a-zA-Z0-9-]+)\.Com\b', r'\1.com', response_text)
+
+        # Additional comprehensive domain fixes
+        # Fix any domain pattern with space before TLD
+        response_text = re.sub(r'([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*)\s+\.\s*([a-zA-Z]{2,})\b', r'\1.\2', response_text)
+        # Fix capitalized TLDs
+        response_text = re.sub(r'\.([A-Z]{2,})\b', lambda m: '.' + m.group(1).lower(), response_text)
+        # Fix space after dot in domains
+        response_text = re.sub(r'([a-zA-Z0-9-]+)\.\s+([a-zA-Z]{2,})\b', r'\1.\2', response_text)
+
+        # CRITICAL EMAIL FIX: Extract and preserve user's email from input FIRST
+        user_email = None
+        user_email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', user_input)
+        if user_email_match:
+            user_email = user_email_match.group()
+            logger.info(f"User provided email: {user_email}")
+
+            # Find ANY mention of an email in response that looks like it could be the user's email
+            # This includes truncated or corrupted versions
+            domain = user_email.split('@')[1]  # e.g., "gmail.com"
+            username = user_email.split('@')[0]  # e.g., "ehdhk"
+
+            # Create patterns to match corrupted versions of the user's email
+            corruption_patterns = [
+                # Truncated username: "k@gmail.com" instead of "ehdhk@gmail.com"
+                rf'\b[a-z]{{1,3}}@{re.escape(domain)}',
+                # Space in domain: "ehdhk@gmail. com" or "k@gmail. Com"
+                rf'[a-zA-Z0-9._%+-]*@{domain.split(".")[0]}\s*\.\s*{domain.split(".")[1]}',
+                # Partial username with space in domain
+                rf'{username[-3:] if len(username) > 3 else username}@{domain.split(".")[0]}\s*\.\s*[Cc]om',
+                # Just the last letter(s): "k@gmail.Com" or "hk@gmail.com"
+                rf'{username[-1]}@{re.escape(domain)}',
+                rf'{username[-2:] if len(username) > 2 else username}@{re.escape(domain)}',
+                # Any short variation with the domain
+                rf'\b\w{{1,5}}@{re.escape(domain)}',
+                # Domain with capitalization issues
+                rf'[a-zA-Z0-9._%+-]*@{domain.split(".")[0]}\s*\.\s*[Cc]om',
+                # The word "email" followed by truncated version
+                rf'email\s+\w{{1,5}}@{re.escape(domain)}',
+                # Any mention of partial username@domain
+                rf'\b\w*{username[-1]}@{re.escape(domain)}',
+            ]
+
+            # Replace ALL corrupted versions with the correct email
+            for pattern in corruption_patterns:
+                matches = list(re.finditer(pattern, response_text, re.IGNORECASE))
+                for match in matches:
+                    # Check if this isn't the support email
+                    if 'support' not in match.group().lower() and 'novarsis' not in match.group().lower():
+                        logger.info(f"Replacing corrupted email: {match.group()} with {user_email}")
+                        response_text = response_text[:match.start()] + user_email + response_text[match.end():]
+
+            # ADDITIONAL FIX: Look for the exact user email with space/capitalization issues
+            # This catches cases where the full email is present but formatted wrong
+            # e.g., "ejdneajd@gmail. Com" -> "ejdneajd@gmail.com"
+            corrupted_exact_patterns = [
+                # Username with space after dot: "ejdneajd@gmail. com"
+                rf'{re.escape(username)}@{domain.split(".")[0]}\s*\.\s*{domain.split(".")[1]}',
+                # Username with capital Com: "ejdneajd@gmail.Com"
+                rf'{re.escape(username)}@{domain.split(".")[0]}\.{domain.split(".")[1].capitalize()}',
+                # Username with space and capital: "ejdneajd@gmail. Com"
+                rf'{re.escape(username)}@{domain.split(".")[0]}\s*\.\s*{domain.split(".")[1].capitalize()}',
+                # Any capitalization variation
+                rf'{re.escape(username)}@{domain.split(".")[0]}\s*\.\s*[Cc][Oo][Mm]',
+            ]
+
+            for pattern in corrupted_exact_patterns:
+                if re.search(pattern, response_text, re.IGNORECASE):
+                    logger.info(f"Fixing exact email corruption: {pattern}")
+                    response_text = re.sub(pattern, user_email, response_text, flags=re.IGNORECASE)
+
+        # COMPREHENSIVE EMAIL FIXES for ALL emails (not just user's)
+        # Fix patterns like "email. com" or "email. Com"
+        response_text = re.sub(
+            r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+)\s+\.\s*([Cc][Oo][Mm]|[Cc]om|[Cc]o\.in|[Nn]et|[Oo]rg|[Ii]n|[Ii]o)',
+            r'\1.com', response_text)
+
+        # Fix any email ending with ". Com" (space + capital C)
+        response_text = re.sub(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+)\s*\.\s*Com\b', r'\1.com', response_text)
+
+        # Fix any email ending with ".Com" (no space, capital C)
+        response_text = re.sub(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+)\.Com\b', r'\1.com', response_text)
+
+        # Fix user emails that got corrupted (e.g., "gbgbnd@gmail. Com" -> "gbgbnd@gmail.com")
+        response_text = re.sub(r'@([a-zA-Z0-9.-]+)\s+\.\s*([Cc][Oo][Mm]|[Cc]om)', r'@\1.com', response_text)
+        response_text = re.sub(r'@([a-zA-Z0-9.-]+)\s+\.\s*([Nn][Ee][Tt]|[Nn]et)', r'@\1.net', response_text)
+        response_text = re.sub(r'@([a-zA-Z0-9.-]+)\s+\.\s*([Oo][Rr][Gg]|[Oo]rg)', r'@\1.org', response_text)
+        response_text = re.sub(r'@([a-zA-Z0-9.-]+)\s+\.\s*([Cc][Oo]\.in)', r'@\1.co.in', response_text)
+
+        # Fix support@ duplication EARLY - Multiple patterns to catch all variations
+        response_text = re.sub(r'support@support@novarsistech', 'support@novarsistech', response_text,
+                               flags=re.IGNORECASE)
+        response_text = re.sub(r'support@support@', 'support@', response_text, flags=re.IGNORECASE)
+        response_text = re.sub(r'email:\s*support@support@', 'email: support@', response_text, flags=re.IGNORECASE)
+        response_text = re.sub(r'contact:\s*support@support@', 'contact: support@', response_text, flags=re.IGNORECASE)
+
+        # Fix the specific pattern: "you can email: support@support@..."
+        response_text = re.sub(r'(you can email|can email|email them at|reach them at)\s*:\s*support@support@',
+                               r'\1: support@', response_text, flags=re.IGNORECASE)
+
+        # Fix Contact Us: support@support@ pattern
+        response_text = re.sub(r'(Contact\s+Us\s*:\s*)support@support@', r'\1support@', response_text,
+                               flags=re.IGNORECASE)
+
+        # Fix any sentence ending with support@support@
+        response_text = re.sub(r'(email|contact|reach|write to)\s*:\s*support@support@', r'\1: support@', response_text,
+                               flags=re.IGNORECASE)
+
+        # Fix patterns where space got inserted in domain (gmail. com -> gmail.com)
+        response_text = re.sub(
+            r'@(gmail|yahoo|hotmail|outlook|aol|icloud|proton|mail|email)\s*\.\s*([Cc]om|[Nn]et|[Oo]rg)', r'@\1.\2',
+            response_text, flags=re.IGNORECASE)
+
+        # If user_email exists, do a final pass to ensure it's correctly formatted everywhere
+        if user_email:
+            # Make sure user's email is properly formatted (fix any remaining issues)
+            response_text = response_text.replace(user_email.replace('.com', '.Com'), user_email)
+            response_text = response_text.replace(user_email.replace('.com', '. com'), user_email)
+            response_text = response_text.replace(user_email.replace('.com', '. Com'), user_email)
+
+        # Fix alphanumeric spacing (but protect emails)
+        # Protect email addresses first - improved pattern to catch more variations
+        protected_emails = []
+        email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+        for match in re.finditer(email_pattern, response_text):
+            placeholder = f'__EMAIL_{len(protected_emails)}__'
+            protected_emails.append(match.group())
             response_text = response_text.replace(match.group(), placeholder)
 
-        # Add spaces between numbers and letters
+        # Also protect any remaining email-like patterns that might have been missed
+        # This catches patterns like "email@domain.com" or "user@domain. com"
+        extended_email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\s*\.\s*[a-zA-Z]{2,}'
+        for match in re.finditer(extended_email_pattern, response_text):
+            if f'__EMAIL_{len(protected_emails)}__' not in response_text:  # Avoid duplicates
+                placeholder = f'__EMAIL_{len(protected_emails)}__'
+                protected_emails.append(match.group().replace(' ', ''))  # Clean the email
+                response_text = response_text.replace(match.group(), placeholder)
+
+        # Now add spaces between numbers and letters
         response_text = re.sub(r'(\d+)([a-zA-Z])', r'\1 \2', response_text)
         response_text = re.sub(r'([a-zA-Z])(\d+)', r'\1 \2', response_text)
 
-        # Restore ticket numbers
-        for placeholder, original in protected_tickets.items():
-            response_text = response_text.replace(placeholder, original)
+        # Restore protected emails
+        for i, email in enumerate(protected_emails):
+            response_text = response_text.replace(f'__EMAIL_{i}__', email)
+
+        # NOW fix email formatting after alphanumeric spacing
+        response_text = fix_email_format(response_text)
 
         # Enhanced cleaning for grammar and formatting
         # Remove ** symbols
@@ -1317,7 +1500,7 @@ Please let me know if you have any SEO tool related questions?"""
         response_text = re.sub(r'^(Hey there[!,. ]*I\'?m Nova.*?assistant[.!]?\s*)', '', response_text,
                                flags=re.IGNORECASE).strip()
         # Keep alphanumeric, spaces, common punctuation, newlines, and bullet/section characters
-        response_text = re.sub(r'[^a-zA-Z0-9 .,!?:;()\n•-]', '', response_text)
+        response_text = re.sub(r'[^a-zA-Z0-9 .,!?:;()\n•@-]', '', response_text)
 
         # Fix common grammar issues
         # Ensure space after period if not followed by a newline
@@ -1354,40 +1537,85 @@ Please let me know if you have any SEO tool related questions?"""
         # Make the response more presentable
         response_text = format_response_presentable(response_text)
 
-        # Final ticket number cleanup - ensure no breaks in ticket numbers
-        # This is critical to handle any NVS numbers that got split
-        response_text = re.sub(r'(Ticket (?:Number|ID):\s*)NVS\s*\n\s*([\d]+)', r'\1NVS\2', response_text)
-        response_text = re.sub(r'NVS\s*\n\s*([\d]{5})', r'NVS\1', response_text)
-        response_text = re.sub(r'NVS\s+([\d]{5})', r'NVS\1', response_text)
-
-        # Replace example ticket number NVS12345 with a random one if it appears
-        if 'NVS12345' in response_text:
-            random_ticket = f'NVS{random.randint(10000, 99999)}'
-            response_text = response_text.replace('NVS12345', random_ticket)
-
-        # Ensure "Have I solved your query?" is always on a new paragraph
-        if "Have I solved your query?" in response_text:
+        # Ensure "Have I resolved your query?" is always on a new paragraph
+        if "Have I resolved your query?" in response_text:
             # Replace any occurrence where it's not after a newline
-            response_text = response_text.replace(" Have I solved your query?", "\n\nHave I solved your query?")
+            response_text = response_text.replace(" Have I resolved your query?", "\n\nHave I resolved your query?")
             # Also handle if it's at the start of a line but without enough spacing
-            response_text = response_text.replace("\nHave I solved your query?", "\n\nHave I solved your query?")
+            response_text = response_text.replace("\nHave I resolved your query?", "\n\nHave I resolved your query?")
             # Clean up any triple newlines that might have been created
-            response_text = re.sub(r'\n{3,}Have I solved your query\?', '\n\nHave I solved your query?', response_text)
+            response_text = re.sub(r'\n{3,}Have I resolved your query\?', '\n\nHave I resolved your query?',
+                                   response_text)
+
+        # FINAL EMAIL FIX - Run this at the very end to catch any corrupted emails
+        # This is the last line of defense
+
+        # CRITICAL: Final fix for support@support@ duplication
+        response_text = re.sub(r'support@support@novarsistech\.com', 'support@novarsistech.com', response_text,
+                               flags=re.IGNORECASE)
+        response_text = re.sub(r'support@support@', 'support@', response_text, flags=re.IGNORECASE)
+
+        # Fix standard support email variations
+        response_text = re.sub(
+            r'support(?:@)?\s*novarsis\s*tech\s*\.\s*[Cc]om',
+            'support@novarsistech.com',
+            response_text,
+            flags=re.IGNORECASE
+        )
+        # Also fix variations without 'support'
+        response_text = re.sub(
+            r'(?:contact\s+us\s+(?:on|at)\s+)\s*novarsis\s*tech\s*\.\s*[Cc]om',
+            'support@novarsistech.com',
+            response_text,
+            flags=re.IGNORECASE
+        )
+
+        # FINAL CLEANUP - Remove "For more information" phrase if it still exists
+        response_text = re.sub(
+            r'For more information[,.]?\s*please contact us on\s*',
+            'Contact Us: ',
+            response_text,
+            flags=re.IGNORECASE
+        )
+        response_text = re.sub(
+            r'For more information[,.]?\s*contact us at\s*',
+            'Contact Us: ',
+            response_text,
+            flags=re.IGNORECASE
+        )
+        
+        # ABSOLUTE FINAL DOMAIN FIX - One more pass to catch any remaining issues
+        # Extract domains from user input one more time for final check
+        user_domains = re.findall(r'\b([a-zA-Z0-9-]+\.[a-zA-Z]{2,})\b', user_input, re.IGNORECASE)
+        for domain in user_domains:
+            clean_domain = domain.lower().strip()
+            # Find and replace ANY variation of this domain
+            domain_name = clean_domain.split('.')[0]
+            domain_ext = clean_domain.split('.')[-1]
+            
+            # Create a super aggressive pattern that catches ANY variation
+            # This will match: domain. com, domain .com, domain. Com, domain .Com, etc.
+            super_pattern = rf'{re.escape(domain_name)}\s*\.\s*{re.escape(domain_ext)}'
+            response_text = re.sub(super_pattern, clean_domain, response_text, flags=re.IGNORECASE)
+            
+            # Also fix if the extension got capitalized
+            wrong_domain = f'{domain_name}.{domain_ext.capitalize()}'
+            response_text = response_text.replace(wrong_domain, clean_domain)
+            wrong_domain = f'{domain_name}. {domain_ext.capitalize()}'
+            response_text = response_text.replace(wrong_domain, clean_domain)
+            wrong_domain = f'{domain_name} . {domain_ext.capitalize()}'
+            response_text = response_text.replace(wrong_domain, clean_domain)
+            wrong_domain = f'{domain_name}. {domain_ext}'
+            response_text = response_text.replace(wrong_domain, clean_domain)
 
         return response_text.strip()
     except Exception as e:
         logger.error(f"Error generating AI response: {str(e)}")
-        return "I encountered an issue processing your request. Please try rephrasing your question or connect with our human support team for assistance."
-
-
-def save_unresolved_query(query_data: Dict) -> str:
-    query_data['timestamp'] = datetime.now()
-    query_data['ticket_id'] = f"NVS{random.randint(10000, 99999)}"
-    query_data['status'] = "In Progress"
-    query_data['priority'] = "High" if "urgent" in query_data['query'].lower() else "Normal"
-    session_state["unresolved_queries"].append(query_data)
-    session_state["support_tickets"][query_data['ticket_id']] = query_data
-    return query_data['ticket_id']
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(
+            f"User input was: {user_input[:100]}..." if len(user_input) > 100 else f"User input was: {user_input}")
+        # Return a more helpful error message
+        return "I'm experiencing a temporary issue. Please try your question again, or for immediate assistance, contact us at support@novarsistech.com"
 
 
 # API Routes
@@ -1400,7 +1628,7 @@ async def read_root(request: Request):
 async def chat(request: ChatRequest):
     # Check if request is from mobile
     is_mobile = request.platform == "mobile"
-    
+
     # Special handling for image attachments with SEO errors
     if request.image_data:
         # If user hasn't provided context, add a default message for SEO error analysis
@@ -1409,16 +1637,31 @@ async def chat(request: ChatRequest):
         elif len(request.message.strip()) < 20 and "error" not in request.message.lower():
             # If message is too short and doesn't mention error, enhance it
             request.message = f"{request.message}. This screenshot shows SEO errors I'm encountering. Please help me understand and fix them."
-    
+
     # Add mobile context to session if mobile
     if is_mobile:
         session_state["platform"] = "mobile"
-    # Check if the user is responding to "Have I solved your query?"
+    # Check if the user is responding to "Have I resolved your query?"
     if session_state.get("last_bot_message_ends_with_query_solved"):
         if request.message.lower() in ["no", "nope", "not really", "not yet"]:
-            # User says no, so we connect with an expert
+            # User says no, so we provide contact information
             session_state["last_bot_message_ends_with_query_solved"] = False
-            return await connect_expert()
+            response = """Contact Us:
+support@novarsistech.com"""
+            bot_message = {
+                "role": "assistant",
+                "content": response,
+                "timestamp": datetime.now(),
+                "show_feedback": True
+            }
+            session_state["chat_history"].append(bot_message)
+            return {
+                "response": response,
+                "show_feedback": True,
+                "response_type": "text",
+                "quick_actions": [],
+                "timestamp": datetime.now().isoformat()
+            }
         elif request.message.lower() in ["yes", "yeah", "yep", "thank you", "thanks"]:
             # User says yes, we can acknowledge
             session_state["last_bot_message_ends_with_query_solved"] = False
@@ -1458,37 +1701,7 @@ async def chat(request: ChatRequest):
     # Get AI response with chat history for context
     time.sleep(0.5)  # Simulate thinking time
 
-    if session_state["checking_ticket_status"]:
-        ticket_id = request.message.strip().upper()
-
-        if ticket_id.startswith("NVS") and len(ticket_id) > 3:
-            if ticket_id in session_state["support_tickets"]:
-                ticket = session_state["support_tickets"][ticket_id]
-                # Mobile-optimized response
-                if session_state.get("platform") == "mobile":
-                    response = f"""🎫 {ticket_id}
-✅ {ticket['status']}
-🔔 {ticket['priority']} Priority
-
-We're working on it!"""
-                else:
-                    response = f"""🎫 Ticket Details:
-
-Ticket ID: {ticket_id}
-Status: {ticket['status']}
-Priority: {ticket['priority']}
-Created: {ticket['timestamp'].strftime('%Y-%m-%d %H:%M')}
-Query: {ticket['query']}
-
-Our team is working on your issue. You'll receive a notification when there's an update."""
-            else:
-                response = f"❌ Ticket ID '{ticket_id}' not found. Please check the ticket number and try again, or contact support at {SUPPORT_EMAIL}."
-        else:
-            response = "⚠️ Please enter a valid ticket ID (e.g., NVS12345)."
-
-        session_state["checking_ticket_status"] = False
-        show_feedback = True  # Changed to True
-    elif is_greeting(request.message):
+    if is_greeting(request.message):
         # Check if there's more content after the greeting (like a problem)
         message_lower = request.message.lower()
         # Remove greeting words to check if there's additional content
@@ -1510,24 +1723,18 @@ Our team is working on your issue. You'll receive a notification when there's an
             # Just greeting
             response = get_intro_response()
 
-        # Extract and save any ticket numbers from the response
-        extract_and_save_ticket_from_response(response, request.message)
-
         session_state["intro_given"] = True
         show_feedback = True  # Changed to True
     else:
         response = get_ai_response(request.message, request.image_data, session_state["chat_history"])
         show_feedback = True  # Already True
 
-        # Extract and save any ticket numbers from the AI response
-        extract_and_save_ticket_from_response(response, request.message)
-
     # Update FAST MCP with bot response
     if "fast_mcp" in session_state:
         session_state["fast_mcp"].update_context("assistant", response)
 
-    # Check if the response ends with "Have I solved your query?"
-    if response.strip().endswith("Have I solved your query?"):
+    # Check if the response ends with "Have I resolved your query?"
+    if response.strip().endswith("Have I resolved your query?"):
         session_state["last_bot_message_ends_with_query_solved"] = True
     else:
         session_state["last_bot_message_ends_with_query_solved"] = False
@@ -1552,92 +1759,12 @@ Our team is working on your issue. You'll receive a notification when there's an
     }
 
 
-@app.post("/api/check-ticket-status")
-async def check_ticket_status():
-    session_state["checking_ticket_status"] = True
-    response = "Please enter your ticket number (e.g., NVS12345):"
-
-    bot_message = {
-        "role": "assistant",
-        "content": response,
-        "timestamp": datetime.now(),
-        "show_feedback": True  # Changed to True
-    }
-    session_state["chat_history"].append(bot_message)
-
-    return {"response": response}
-
-
-@app.post("/api/connect-expert")
-async def connect_expert():
-    if session_state["last_user_query"]:
-        ticket_id = save_unresolved_query({
-            "query": session_state["last_user_query"],
-            "timestamp": datetime.now()
-        })
-        # Mobile-optimized response
-        if session_state.get("platform") == "mobile":
-            response = f"""✅ Ticket created!
-
-🎫 {ticket_id}
-⏱️ Response in 15 mins
-
-We'll contact you via:
-• In-app chat
-• WhatsApp
-• Email"""
-        else:
-            response = f"""I've created a priority support ticket for you:
-
-🎫 Ticket ID: {ticket_id}
-📱 Status: Escalated to Human Support
-⏱️ Response Time: Within 15 minutes
-
-Our expert team has been notified and will reach out to you shortly via:
-• In-app chat
-• Email to your registered address
-• WhatsApp: {WHATSAPP_NUMBER}
-
-You can check your ticket status anytime by typing 'ticket {ticket_id}'"""
-    else:
-        response = "I'd be happy to connect you with an expert. Please first send your query so I can create a support ticket for you."
-
-    bot_message = {
-        "role": "assistant",
-        "content": response,
-        "timestamp": datetime.now(),
-        "show_feedback": True  # Changed to True
-    }
-    session_state["chat_history"].append(bot_message)
-
-    return {"response": response}
-
-
 @app.post("/api/feedback")
 async def feedback(request: FeedbackRequest):
     if request.feedback == "no":
-        ticket_id = save_unresolved_query(session_state["current_query"])
-        # Mobile-optimized response
-        if session_state.get("platform") == "mobile":
-            response = f"""Got it! Created ticket:
-
-🎫 {ticket_id}
-⏱️ Expert will help in 15 mins
-
-Check status anytime!"""
-        else:
-            response = f"""I understand this didn't fully resolve your issue. I've created a priority support ticket for you:
-
-🎫 Ticket ID: {ticket_id}
-📱 Status: Escalated to Human Support
-⏱️ Response Time: Within 15 minutes
-
-Our expert team has been notified and will reach out to you shortly via:
-• In-app chat
-• Email to your registered address
-• WhatsApp: {WHATSAPP_NUMBER}
-
-You can check your ticket status anytime by typing 'ticket {ticket_id}'"""
+        # Don't create ticket anymore, just provide contact info
+        response = """Contact Us:
+support@novarsistech.com"""
         session_state["resolved_count"] -= 1
     else:
         if session_state.get("platform") == "mobile":
@@ -1668,7 +1795,7 @@ async def upload_file(file: UploadFile = File(...)):
     # Read file and convert to base64
     contents = await file.read()
     base64_image = base64.b64encode(contents).decode('utf-8')
-    
+
     # Log that an image with potential SEO errors was uploaded
     logger.info(f"Image uploaded for SEO error analysis: {file.filename}")
 
@@ -1679,14 +1806,15 @@ async def upload_file(file: UploadFile = File(...)):
 async def get_chat_history():
     return {"chat_history": session_state["chat_history"]}
 
+
 @app.post("/api/mobile/chat")
 async def mobile_chat(request: ChatRequest):
     """Mobile-specific chat endpoint with optimized responses"""
     request.platform = "mobile"  # Force mobile platform
-    
+
     # Process the chat request
     response = await chat(request)
-    
+
     # Format response for mobile
     mobile_response = {
         "status": "success",
@@ -1704,8 +1832,9 @@ async def mobile_chat(request: ChatRequest):
             }
         }
     }
-    
+
     return mobile_response
+
 
 @app.get("/api/mobile/suggestions")
 async def get_mobile_suggestions():
@@ -1716,28 +1845,18 @@ async def get_mobile_suggestions():
             "suggestions": [
                 {"text": "🔍 Check SEO Score", "id": "seo_check"},
                 {"text": "💳 View Plans", "id": "view_plans"},
-                {"text": "📋 My Tickets", "id": "tickets"},
-                {"text": "💬 Expert Help", "id": "expert"}
+                {"text": "📞 Contact Support", "id": "contact"}
             ]
         }
     }
+
 
 @app.post("/api/mobile/quick-action")
 async def handle_quick_action(request: dict):
     """Handle quick action button clicks from mobile"""
     action = request.get("action", "")
-    
-    if action == "view_ticket":
-        # Return ticket details
-        return {
-            "status": "success",
-            "data": {
-                "action": "navigate",
-                "screen": "tickets",
-                "params": {"filter": "active"}
-            }
-        }
-    elif action == "call_support":
+
+    if action == "call_support":
         return {
             "status": "success",
             "data": {
@@ -1824,6 +1943,135 @@ with open("templates/index.html", "w") as f:
             display: flex;
             justify-content: space-between;
             align-items: center;
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .contact-btn {
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .contact-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .contact-popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            z-index: 1000;
+            display: none;
+            text-align: center;
+        }
+
+        .contact-popup.show {
+            display: block;
+            animation: popIn 0.3s ease;
+        }
+
+        @keyframes popIn {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
+
+        .contact-popup h3 {
+            margin-top: 0;
+            color: #333;
+            font-size: 20px;
+        }
+
+        .contact-email {
+            font-size: 18px;
+            color: #667eea;
+            font-weight: 600;
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            user-select: all;
+            cursor: pointer;
+        }
+
+        .copy-btn {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 10px 5px;
+        }
+
+        .copy-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .close-popup-btn {
+            padding: 10px 20px;
+            background: #f1f3f5;
+            color: #333;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 10px 5px;
+        }
+
+        .close-popup-btn:hover {
+            background: #e1e4e8;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+            display: none;
+        }
+
+        .overlay.show {
+            display: block;
         }
 
         .logo {
@@ -2266,15 +2514,33 @@ with open("templates/index.html", "w") as f:
     </style>
 </head>
 <body>
+    <div class="overlay" id="overlay"></div>
+
+    <div class="contact-popup" id="contactPopup">
+        <h3>📧 Contact Support</h3>
+        <div class="contact-email" id="contactEmail">support@novarsistech.com</div>
+        <button class="copy-btn" onclick="copyEmail()">📋 Copy Email</button>
+        <button class="close-popup-btn" onclick="closeContactPopup()">Close</button>
+    </div>
+
     <div class="main-container">
         <div class="header-container">
             <div class="logo-section">
                 <span class="logo">🚀 NOVARSIS</span>
-                <span style="color: #95a5a6; font-size: 14px;">AI Support Center</span>
+                <span style="color: #95a5a6; font-size: 14px; margin-left: 10px;">AI Support Center</span>
             </div>
-            <div class="status-indicator">
-                <div class="status-dot"></div>
-                <span>Nova is Online</span>
+            <div class="header-right">
+                <button class="contact-btn" onclick="showContactPopup()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M22 6l-10 7L2 6" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    Contact Us
+                </button>
+                <div class="status-indicator">
+                    <div class="status-dot"></div>
+                    <span>Nova is Online</span>
+                </div>
             </div>
         </div>
 
@@ -2312,6 +2578,31 @@ with open("templates/index.html", "w") as f:
     </div>
 
     <script>
+        // Contact popup functions
+        function showContactPopup() {
+            document.getElementById('contactPopup').classList.add('show');
+            document.getElementById('overlay').classList.add('show');
+        }
+
+        function closeContactPopup() {
+            document.getElementById('contactPopup').classList.remove('show');
+            document.getElementById('overlay').classList.remove('show');
+        }
+
+        function copyEmail() {
+            const email = 'support@novarsistech.com';
+            navigator.clipboard.writeText(email).then(() => {
+                const copyBtn = event.target;
+                const originalText = copyBtn.textContent;
+                copyBtn.textContent = '✓ Copied!';
+                setTimeout(() => {
+                    copyBtn.textContent = originalText;
+                }, 2000);
+            });
+        }
+
+        // Close popup when clicking overlay
+        document.getElementById('overlay').addEventListener('click', closeContactPopup);
         // Format time function
         function formatTime(timestamp) {
             const date = new Date(timestamp);
@@ -2326,8 +2617,8 @@ with open("templates/index.html", "w") as f:
                 initialTimestamp.textContent = formatTime(new Date());
             }
 
-            // Load initial suggestions
-            loadInitialSuggestions();
+            // Don't load initial suggestions on page load
+            // Suggestions will only appear after user stops typing for 3 seconds
         });
 
         // Chat container
@@ -2452,18 +2743,15 @@ with open("templates/index.html", "w") as f:
             }
         }
 
-        // Real-time typing suggestions with debouncing
+        // Typing suggestions with delay after user stops typing
         let typingTimer;
-        const doneTypingInterval = 300; // ms
+        const doneTypingInterval = 3000; // 3 seconds delay after user stops typing
+        let isTyping = false;
 
         async function fetchTypingSuggestions(input) {
             if (input.trim().length < 2) {
-                // Show initial suggestions if input is empty or very short
-                if (input.trim().length === 0) {
-                    loadInitialSuggestions();
-                } else {
-                    updateSuggestions([]);
-                }
+                // Clear suggestions if input is too short
+                updateSuggestions([]);
                 return;
             }
 
@@ -2483,51 +2771,39 @@ with open("templates/index.html", "w") as f:
             }
         }
 
-        // Handle input changes for real-time suggestions
+        // Handle input changes - hide suggestions while typing, show after delay
         messageInput.addEventListener('input', function(e) {
             clearTimeout(typingTimer);
             const inputValue = e.target.value;
 
-            // Debounce the API call
+            // Hide suggestions immediately when user starts typing
+            if (!isTyping) {
+                isTyping = true;
+                updateSuggestions([]); // Clear suggestions while typing
+            }
+
+            // Set timer to show suggestions after user stops typing
             typingTimer = setTimeout(() => {
-                fetchTypingSuggestions(inputValue);
+                isTyping = false;
+                if (inputValue.trim().length > 0) {
+                    fetchTypingSuggestions(inputValue);
+                } else {
+                    // Show initial suggestions if input is empty
+                    loadInitialSuggestions();
+                }
             }, doneTypingInterval);
         });
 
-        // Handle focus to show suggestions
+        // Handle focus - don't show suggestions immediately
         messageInput.addEventListener('focus', function(e) {
-            if (e.target.value.trim().length === 0) {
-                loadInitialSuggestions();
-            } else {
-                fetchTypingSuggestions(e.target.value);
-            }
+            // Don't show any suggestions on focus
+            // Suggestions will only appear after user stops typing for 3 seconds
         });
 
         // Send message
         async function sendMessage(message, imageData = null) {
-            // Handle special commands
-            if (message.toLowerCase() === 'check ticket status') {
-                // Clear suggestions
-                updateSuggestions([]);
-
-                // Call the check ticket status API
-                try {
-                    const response = await fetch('/api/check-ticket-status', {
-                        method: 'POST'
-                    });
-                    const data = await response.json();
-                    addMessage('assistant', data.response, true);
-                } catch (error) {
-                    console.error('Error checking ticket status:', error);
-                    addMessage('assistant', 'Sorry, I encountered an error checking ticket status.', true);
-                }
-
-                // Load initial suggestions after a delay
-                setTimeout(() => {
-                    loadInitialSuggestions();
-                }, 500);
-                return;
-            }
+            // Handle special commands - ticket system removed
+            // No special commands currently implemented
 
             if (message.toLowerCase() === 'connect with an expert') {
                 // Clear suggestions
