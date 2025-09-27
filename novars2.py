@@ -2985,10 +2985,21 @@ with open("templates/index.html", "w") as f:
             return;
         }
 
-        // Typing suggestions with delay after user stops typing
+        /**
+         * DEBOUNCING IMPLEMENTATION
+         * - Suggestions API call fires only after user stops typing for 500ms
+         * - Every keystroke clears the previous timer and sets a new one
+         * - Example: User types "car" quickly:
+         *   - 'c' typed → timer starts
+         *   - 'a' typed → timer resets
+         *   - 'r' typed → timer resets
+         *   - User stops → after 500ms, ONE API call is made with "car"
+         * - This prevents multiple API calls and improves performance
+         */
+        
+        // Typing suggestions with debouncing - 500ms after user stops typing
         let typingTimer;
-        const doneTypingInterval = 3000; // 3 seconds delay after user stops typing
-        let isTyping = false;
+        const DEBOUNCE_DELAY = 500; // 500ms debounce delay
 
         async function fetchTypingSuggestions(input) {
             // Require at least 3 characters before showing suggestions
@@ -3014,28 +3025,26 @@ with open("templates/index.html", "w") as f:
             }
         }
 
-        // Handle input changes - hide suggestions while typing, show after delay
+        // Handle input changes with debouncing
         messageInput.addEventListener('input', function(e) {
-            clearTimeout(typingTimer);
             const inputValue = e.target.value;
-
-            // Hide suggestions immediately when user starts typing
-            if (!isTyping) {
-                isTyping = true;
-                updateSuggestions([]); // Clear suggestions while typing
-            }
-
-            // Set timer to show suggestions after user stops typing
+            
+            // Clear existing timer (debouncing)
+            clearTimeout(typingTimer);
+            
+            // Clear suggestions immediately while typing
+            updateSuggestions([]);
+            
+            // Set new timer - execute after user stops typing for 500ms
             typingTimer = setTimeout(() => {
-                isTyping = false;
                 // Only fetch suggestions if input has at least 3 characters
                 if (inputValue.trim().length >= 3) {
                     fetchTypingSuggestions(inputValue);
                 } else {
-                    // Don't show initial suggestions - keep empty
+                    // Keep suggestions empty for short input
                     updateSuggestions([]);
                 }
-            }, doneTypingInterval);
+            }, DEBOUNCE_DELAY);
         });
 
         // Handle focus - don't show suggestions immediately
