@@ -298,13 +298,13 @@ def get_mobile_quick_actions(response: str) -> list:
 
 def get_context_suggestions(message: str) -> list:
     """Get relevant quick reply suggestions based on user's input context - MOBILE OPTIMIZED."""
-    if not message or len(message.strip()) < 2:
-        # Return only 4 suggestions for mobile
-        return QUICK_REPLY_SUGGESTIONS["initial"][:4]
+    # Don't show suggestions for very short input (less than 3 characters)
+    if not message or len(message.strip()) < 3:
+        return []
 
     message_lower = message.lower().strip()
 
-    # Return empty if message is very short
+    # Return empty if message is still too short after stripping
     if len(message_lower) < 3:
         return []
 
@@ -2132,13 +2132,20 @@ async def handle_quick_action(request: dict):
 @app.get("/api/suggestions")
 async def get_suggestions():
     """Get initial suggestions when the chat loads."""
-    return {"suggestions": QUICK_REPLY_SUGGESTIONS["initial"]}
+    # Return empty suggestions initially - don't show anything until user types
+    return {"suggestions": []}
 
 
 @app.post("/api/typing-suggestions")
 async def get_typing_suggestions(request: dict):
     """Get real-time suggestions based on what user is typing."""
     user_input = request.get("input", "")
+    
+    # Only show suggestions if user has typed at least 3 characters
+    # This prevents suggestions from appearing immediately
+    if len(user_input.strip()) < 3:
+        return {"suggestions": []}
+    
     suggestions = get_context_suggestions(user_input)
     return {"suggestions": suggestions}
 
@@ -2973,13 +2980,9 @@ with open("templates/index.html", "w") as f:
 
         // Load initial suggestions
         async function loadInitialSuggestions() {
-            try {
-                const response = await fetch('/api/suggestions');
-                const data = await response.json();
-                updateSuggestions(data.suggestions);
-            } catch (error) {
-                console.error('Error loading suggestions:', error);
-            }
+            // DON'T load any suggestions initially - user must type first
+            // Empty function - suggestions only appear after typing
+            return;
         }
 
         // Typing suggestions with delay after user stops typing
@@ -2988,7 +2991,8 @@ with open("templates/index.html", "w") as f:
         let isTyping = false;
 
         async function fetchTypingSuggestions(input) {
-            if (input.trim().length < 2) {
+            // Require at least 3 characters before showing suggestions
+            if (input.trim().length < 3) {
                 // Clear suggestions if input is too short
                 updateSuggestions([]);
                 return;
@@ -3024,11 +3028,12 @@ with open("templates/index.html", "w") as f:
             // Set timer to show suggestions after user stops typing
             typingTimer = setTimeout(() => {
                 isTyping = false;
-                if (inputValue.trim().length > 0) {
+                // Only fetch suggestions if input has at least 3 characters
+                if (inputValue.trim().length >= 3) {
                     fetchTypingSuggestions(inputValue);
                 } else {
-                    // Show initial suggestions if input is empty
-                    loadInitialSuggestions();
+                    // Don't show initial suggestions - keep empty
+                    updateSuggestions([]);
                 }
             }, doneTypingInterval);
         });
@@ -3062,7 +3067,8 @@ with open("templates/index.html", "w") as f:
 
                 // Load initial suggestions after a delay
                 setTimeout(() => {
-                    loadInitialSuggestions();
+                    // Don't load suggestions - user must type first
+                    updateSuggestions([]);
                 }, 500);
                 return;
             }
@@ -3098,9 +3104,9 @@ with open("templates/index.html", "w") as f:
                 // Add bot response
                 addMessage('assistant', data.response, data.show_feedback);
 
-                // Load initial suggestions after response
+                // Don't load suggestions after response - user must type
                 setTimeout(() => {
-                    loadInitialSuggestions();
+                    updateSuggestions([]);
                 }, 500);
 
                 // Reset attachment
@@ -3120,9 +3126,9 @@ with open("templates/index.html", "w") as f:
                 console.error('Error sending message:', error);
                 typingIndicator.remove();
                 addMessage('assistant', 'Sorry, I encountered an error. Please try again.', true);
-                // Show initial suggestions even on error
+                // Don't show suggestions on error - user must type
                 setTimeout(() => {
-                    loadInitialSuggestions();
+                    updateSuggestions([]);
                 }, 500);
             }
         }
