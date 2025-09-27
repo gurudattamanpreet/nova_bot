@@ -186,20 +186,23 @@ SPECIAL INSTRUCTIONS:
    ✓ Mobile optimization
 4. When comparing pricing plans (ONLY when asked about pricing/plans/costs), use MOBILE-FRIENDLY format:
 
-📱 **Free Plan**
-• 5 websites
+Free Plan
+ 5 websites
 • All SEO tools
-• $0/month
+• 0/month
 
-💼 **Pro Plan**
-• 50 websites
+Pro Plan
+50 websites
 • Priority support
-• $49/month
+• 49/month
 
-🏢 **Enterprise**
+Enterprise
 • Unlimited sites
 • Dedicated manager
 • Custom pricing
+
+NEVER format plans in a single line like "Free Plan • 5 websites • All SEO tools"
+ALWAYS use proper line breaks between plan name and features
 
 5. If the user mentions multiple problems, address each one in your response.
 6. At the end of your response, if you feel the answer might be incomplete or the user might need more help, ask: "Have I resolved your query?" If the user says no, then provide contact information:
@@ -723,40 +726,118 @@ def call_ollama_api(prompt: str, image_data: Optional[str] = None) -> str:
         return f"Error: {str(e)}. Please check the logs for details."
 
 
+def remove_duplicate_pricing(text: str) -> str:
+    """Remove duplicate pricing plan entries"""
+    lines = text.split('\n')
+    seen_plans = set()
+    filtered_lines = []
+    current_plan = None
+
+    for line in lines:
+        line_lower = line.lower().strip()
+
+        # Check if this is a plan header
+        if 'free plan' in line_lower:
+            if 'free plan' not in seen_plans:
+                seen_plans.add('free plan')
+                current_plan = 'free plan'
+                filtered_lines.append(line)
+            else:
+                current_plan = None  # Skip duplicate plan
+        elif 'pro plan' in line_lower:
+            if 'pro plan' not in seen_plans:
+                seen_plans.add('pro plan')
+                current_plan = 'pro plan'
+                filtered_lines.append(line)
+            else:
+                current_plan = None
+        elif 'enterprise' in line_lower and 'plan' not in line_lower:
+            if 'enterprise' not in seen_plans:
+                seen_plans.add('enterprise')
+                current_plan = 'enterprise'
+                filtered_lines.append(line)
+            else:
+                current_plan = None
+        elif current_plan is not None:
+            # This line belongs to the current plan
+            filtered_lines.append(line)
+        elif not any(p in line_lower for p in ['free plan', 'pro plan', 'enterprise']):
+            # This line is not part of any plan
+            filtered_lines.append(line)
+
+    return '\n'.join(filtered_lines)
+
+
 def format_pricing_plans(text: str) -> str:
-    """Format pricing plans to ensure each bullet point is on a new line"""
+    """Format pricing plans to ensure proper structure and line breaks"""
+    # First remove any duplicates
+    text = remove_duplicate_pricing(text)
+
     # Check if the text contains pricing plan information
-    if "Free Plan:" in text and "Pro Plan:" in text and "Enterprise Plan:" in text:
-        # Extract the pricing section
-        pricing_start = text.find("Free Plan:")
-        if pricing_start != -1:
-            pricing_end = len(text)
-            pricing_section = text[pricing_start:pricing_end]
+    if any(plan in text.lower() for plan in ["free plan", "pro plan", "enterprise"]):
+        # Define the exact format we want (NO ASTERISKS, NO DOLLAR SIGNS)
+        pricing_format = {
+            "Free Plan": [
+                " 5 websites",
+                "• All SEO tools",
+                "• 0/month"
+            ],
+            "Pro Plan": [
+                "50 websites",
+                "• Priority support",
+                "• 49/month"
+            ],
+            "Enterprise": [
+                "• Unlimited sites",
+                "• Dedicated manager",
+                "• Custom pricing"
+            ]
+        }
 
-            # Replace the pricing section with properly formatted one
-            formatted_pricing = """Free Plan: 
-Up to 5 websites 
-- Full access to all SEO tools 
-- Generate reports 
-- No credit card required
+        # Look for any variation of pricing plans and replace with correct format
+        for plan_name, features in pricing_format.items():
+            # Pattern to match any variation of this plan
+            patterns = [
+                # Pattern with inline features
+                rf'{plan_name}[:\s]*[^\n]*(?:websites|sites)[^\n]*(?:tools|support|manager)[^\n]*(?:month|pricing)',
+                # Pattern with bullets on same line
+                rf'{plan_name}[:\s]*•[^\n]+',
+                # Simple plan name
+                rf'{plan_name}[:\s]*'
+            ]
 
-Pro Plan:
-Up to 50 websites 
-- All Free features 
-- Priority support 
-- API access 
-- $49 per month
+            for pattern in patterns:
+                if re.search(pattern, text, re.IGNORECASE):
+                    # Replace with properly formatted version (NO ASTERISKS)
+                    formatted_plan = f"\n\n{plan_name}\n" + "\n".join(features)
+                    text = re.sub(pattern, formatted_plan, text, flags=re.IGNORECASE)
+                    break
 
-Enterprise Plan:
-Unlimited websites (custom limits) 
-- All Pro features 
-- Dedicated account manager 
-- SLA guarantees 
-- Custom integrations 
-- Contact sales for a quote"""
+        # Clean up any remaining formatting issues (NO ASTERISKS)
+        text = re.sub(r'(Free Plan:?)\s*([•\-])?\s*', r'\n\nFree Plan\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'(Pro Plan:?)\s*([•\-])?\s*', r'\n\nPro Plan\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'(Enterprise:?)\s*([•\-])?\s*', r'\n\nEnterprise\n', text, flags=re.IGNORECASE)
 
-            # Replace the pricing section in the original text
-            text = text[:pricing_start] + formatted_pricing + "\n" + text[pricing_end:]
+        # Fix bullet points in pricing - ensure they're on new lines
+        text = re.sub(r'([^\n])\s*•\s*', r'\1\n• ', text)
+        text = re.sub(r'([^\n])\s*\-\s*([A-Z])', r'\1\n- \2', text)
+
+        # Fix pricing amounts that got merged
+        text = re.sub(r'(\$?\d+)\s*(month|/month|per month)', r'\1/month', text, flags=re.IGNORECASE)
+        text = re.sub(r'(\$?\d+)\s*(year|/year|per year)', r'\1/year', text, flags=re.IGNORECASE)
+
+        # Ensure proper spacing after features
+        text = re.sub(r'(websites|sites)([A-Z])', r'\1\n\2', text)
+        text = re.sub(r'(tools|support|access|manager|pricing|integrations)([A-Z•\-])', r'\1\n\2', text)
+
+        # Fix merged plan names with features
+        text = re.sub(r'(month|year|pricing)\s*([A-Z][a-z]+\s+Plan)', r'\1\n\n\2', text)
+
+        # Clean up multiple spaces
+        text = re.sub(r' {2,}', ' ', text)
+
+        # Ensure bullet points have proper spacing
+        text = re.sub(r'•([^\s])', r'• \1', text)
 
     return text
 
@@ -1141,13 +1222,27 @@ def format_response_presentable(text: str) -> str:
     for trigger in paragraph_triggers:
         text = re.sub(rf'([.!?])\s+({trigger})', r'\1\n\n\2', text)
 
+    # SPECIAL PRICING FORMATTING
+    # Detect and format pricing sections
+    if 'Plan' in text and any(word in text for word in ['websites', 'month', 'pricing', 'features']):
+        # Ensure plan names are on new lines with proper spacing
+        text = re.sub(r'(?<!\n\n)(Free Plan)', r'\n\n\1', text, flags=re.IGNORECASE)
+        text = re.sub(r'(?<!\n\n)(Pro Plan)', r'\n\n\1', text, flags=re.IGNORECASE)
+        text = re.sub(r'(?<!\n\n)(Enterprise Plan)', r'\n\n\1', text, flags=re.IGNORECASE)
+        text = re.sub(r'(?<!\n\n)(Premium Plan)', r'\n\n\1', text, flags=re.IGNORECASE)
+        text = re.sub(r'(?<!\n\n)(Starter Plan)', r'\n\n\1', text, flags=re.IGNORECASE)
+
+        # Format bullet points properly
+        text = re.sub(r'([^\n])•', r'\1\n•', text)  # Ensure bullet on new line
+        text = re.sub(r'•\s*([^\n]+)\s*•', r'• \1\n•', text)  # Split merged bullets
+
     # Clean up spacing issues
     text = re.sub(r'\s*\n\s*', r'\n', text)  # Remove spaces around newlines
-    text = re.sub(r'\n{3,}', r'\n\n', text)  # Max 2 newlines
+    text = re.sub(r'\n{4,}', r'\n\n', text)  # Max 2 newlines
     text = re.sub(r'^\n+', '', text)  # Remove leading newlines
     text = re.sub(r'\n+$', '', text)  # Remove trailing newlines
 
-    return text.strip()
+    return text
 
 
 def fix_email_format(text: str) -> str:
@@ -1271,6 +1366,27 @@ Please let me know if you have any SEO tool related questions?"""
         # Debug: Print the response before processing
         logger.info(f"Response received, length: {len(response_text)}")
         
+        # ULTRA EARLY PRICING FIX - If this is a pricing query, replace the ENTIRE response
+        if ('pricing' in user_input.lower() or 'plans' in user_input.lower() or 
+            'price' in user_input.lower() or 'cost' in user_input.lower()):
+            # This is a pricing query - return the correct format immediately
+            return """Free Plan
+• 5 websites
+• All SEO tools
+• 0/month
+
+Pro Plan
+• 50 websites
+• Priority support
+• 49/month
+
+Enterprise
+• Unlimited sites
+• Dedicated manager
+• Custom pricing
+
+Have I resolved your query?"""
+
         # ULTRA EARLY FIX: Fix domain spacing issues immediately after getting response
         # This pattern catches "domain. Com" or "domain . Com" etc.
         response_text = re.sub(r'([a-zA-Z0-9-]+)\s*\.\s+([Cc][Oo][Mm])\b', r'\1.com', response_text)
@@ -1279,7 +1395,7 @@ Please let me know if you have any SEO tool related questions?"""
         response_text = re.sub(r'([a-zA-Z0-9-]+)\s*\.\s+([Cc][Oo])\b', r'\1.co', response_text)
         response_text = re.sub(r'([a-zA-Z0-9-]+)\s*\.\s+([Ii][Oo])\b', r'\1.io', response_text)
         response_text = re.sub(r'([a-zA-Z0-9-]+)\s*\.\s+([Ii][Nn])\b', r'\1.in', response_text)
-        
+
         # Fix capitalized extensions
         response_text = response_text.replace('. Com', '.com')
         response_text = response_text.replace('.Com', '.com')
@@ -1287,7 +1403,7 @@ Please let me know if you have any SEO tool related questions?"""
         response_text = response_text.replace('.NET', '.net')
         response_text = response_text.replace('. ORG', '.org')
         response_text = response_text.replace('.ORG', '.org')
-        
+
         # Specific fix for the exact pattern you're seeing
         response_text = response_text.replace('knittingknot. Com', 'knittingknot.com')
         response_text = response_text.replace('knittingknot. com', 'knittingknot.com')
@@ -1296,9 +1412,9 @@ Please let me know if you have any SEO tool related questions?"""
 
         # CRITICAL: Fix ALL domain names and URLs (not just emails)
         # Extract any URLs/domains from user input
-        url_pattern = r'(?:https?://)?(?:www\.)?([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,})'        
+        url_pattern = r'(?:https?://)?(?:www\.)?([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,})'
         url_matches = re.findall(url_pattern, user_input, re.IGNORECASE)
-        
+
         # Also look for simple domain patterns
         simple_domain_pattern = r'\b([a-zA-Z0-9-]+\.[a-zA-Z]{2,})\b'
         simple_matches = re.findall(simple_domain_pattern, user_input, re.IGNORECASE)
@@ -1494,8 +1610,9 @@ Please let me know if you have any SEO tool related questions?"""
         response_text = fix_email_format(response_text)
 
         # Enhanced cleaning for grammar and formatting
-        # Remove ** symbols
-        response_text = response_text.replace("**", "")
+        # Remove ALL asterisk symbols (both ** and single *)
+        response_text = re.sub(r'\*+', '', response_text)  # Remove all asterisks
+        response_text = response_text.replace("**", "")  # Extra safety for double asterisks
         # Remove any repetitive intro lines if present
         response_text = re.sub(r'^(Hey there[!,. ]*I\'?m Nova.*?assistant[.!]?\s*)', '', response_text,
                                flags=re.IGNORECASE).strip()
@@ -1520,6 +1637,37 @@ Please let me know if you have any SEO tool related questions?"""
         # Ensure proper paragraph separation
         response_text = re.sub(r'([.!?])\s', r'\1\n\n', response_text)
 
+        # CRITICAL PRICING FIX - Complete replacement for any pricing response
+        # This should happen EARLY in the processing pipeline
+        if ('pricing' in response_text.lower() or 'plans' in response_text.lower() or 
+            'free plan' in response_text.lower() or 'pro plan' in response_text.lower()):
+            
+            # If we detect ANY pricing-related content, replace EVERYTHING with the correct format
+            if any(x in response_text.lower() for x in ['5 websites', '50 websites', 'unlimited sites', 
+                                                         'all seo tools', 'priority support', 'dedicated manager',
+                                                         '0/month', '49/month', 'custom pricing']):
+                
+                # This is definitely a pricing response - replace it completely
+                response_text = """Free Plan
+• 5 websites
+• All SEO tools
+• 0/month
+
+Pro Plan
+• 50 websites
+• Priority support
+• 49/month
+
+Enterprise
+• Unlimited sites
+• Dedicated manager
+• Custom pricing
+
+Have I resolved your query?"""
+                
+                # Skip all other formatting - return immediately
+                return response_text.strip()
+        
         # Format the response text to ensure proper bullet points and numbered lists
         response_text = format_response_text(response_text)
 
@@ -1527,6 +1675,62 @@ Please let me know if you have any SEO tool related questions?"""
 
         # Clean the response (format pricing, remove duplicate questions, fix ticket numbers)
         response_text = clean_response(response_text)
+
+        # SPECIAL PRICING FORMAT FIX
+        # Fix the specific pattern you're seeing
+        if any(plan in response_text for plan in ['Free Plan', 'Pro Plan', 'Enterprise']):
+            # More comprehensive pattern to handle inline pricing plans
+            # Pattern 1: "Free Plan 5 websites All SEO tools 0/month" (no bullets)
+            response_text = re.sub(r'Free Plan\s+5\s+websites\s+All\s+SEO\s+tools\s+0/month',
+                                   r'\n\nFree Plan\n 5 websites\n• All SEO tools\n• 0/month', response_text)
+            response_text = re.sub(r'Pro Plan\s+50\s+websites\s+Priority\s+support\s+49/month',
+                                   r'\n\nPro Plan\n50 websites\n• Priority support\n• 49/month', response_text)
+            response_text = re.sub(r'Enterprise\s+Unlimited\s+sites\s+Dedicated\s+manager\s+Custom\s+pricing',
+                                   r'\n\nEnterprise\n• Unlimited sites\n• Dedicated manager\n• Custom pricing',
+                                   response_text)
+
+            # Pattern 2: Fix patterns like "Free Plan • 5 websites • All SEO tools • 0 month"
+            response_text = re.sub(r'\*\*Free Plan\*\*', 'Free Plan', response_text)  # Remove asterisks
+            response_text = re.sub(r'\*\*Pro Plan\*\*', 'Pro Plan', response_text)
+            response_text = re.sub(r'\*\*Enterprise\*\*', 'Enterprise', response_text)
+            response_text = re.sub(r'Free Plan\s*•\s*([^\n•]+)', r'\n\nFree Plan\n 5 websites', response_text)
+            response_text = re.sub(r'Pro Plan\s*•\s*([^\n•]+)', r'\n\nPro Plan\n50 websites', response_text)
+            response_text = re.sub(r'Enterprise\s*•\s*([^\n•]+)', r'\n\nEnterprise\n• Unlimited sites', response_text)
+
+            # Fix merged bullet points - more comprehensive
+            response_text = re.sub(r'•\s*([^\n•]{1,50})\s*•', r'• \1\n•', response_text)
+
+            # Split features that are merged into single line
+            response_text = re.sub(r'( 5\s+websites)\s+([A-Z])', r'\1\n• \2', response_text)
+            response_text = re.sub(r'(50\s+websites)\s+([^\n])', r'\1\n• \2', response_text)
+            response_text = re.sub(r'(•\s+All\s+SEO\s+tools)\s+([^\n])', r'\1\n• \2', response_text)
+            response_text = re.sub(r'(•\s+Priority\s+support)\s+([^\n])', r'\1\n• \2', response_text)
+            response_text = re.sub(r'(•\s+Unlimited\s+sites)\s+([A-Z])', r'\1\n• \2', response_text)
+            response_text = re.sub(r'(•\s+Dedicated\s+manager)\s+([A-Z])', r'\1\n• \2', response_text)
+
+            # Fix pricing that got merged (like "0 month" should be "0/month")
+            # NOTE: NO DOLLAR SIGNS as per requirement
+            response_text = re.sub(r'(\d+)\s+month\b', r'\1/month', response_text)
+            response_text = re.sub(r'(\d+)\s+year\b', r'\1/year', response_text)
+            # Remove any dollar signs that might have been added
+            response_text = re.sub(r'\$(\d+)/month', r'\1/month', response_text)
+            response_text = re.sub(r'\$(\d+)/year', r'\1/year', response_text)
+
+            # Ensure each bullet point is on new line
+            lines = response_text.split('\n')
+            formatted_lines = []
+            for line in lines:
+                if '•' in line:
+                    # Split by bullet and format
+                    parts = line.split('•')
+                    if len(parts) > 1:
+                        formatted_lines.append(parts[0].strip())
+                        for part in parts[1:]:
+                            if part.strip():
+                                formatted_lines.append('• ' + part.strip())
+                else:
+                    formatted_lines.append(line)
+            response_text = '\n'.join(formatted_lines)
 
         # Fix common spacing and grammar issues
         response_text = fix_common_spacing_issues(response_text)
@@ -1583,6 +1787,41 @@ Please let me know if you have any SEO tool related questions?"""
             response_text,
             flags=re.IGNORECASE
         )
+
+        # FINAL PRICING CHECK - Ensure all three plans are shown
+        if ('pricing' in response_text.lower() or 'plans' in response_text.lower() or 
+            ('free plan' in response_text.lower() and '5 websites' in response_text.lower())):
+            # Count how many plans are mentioned
+            plans_mentioned = []
+            if 'free plan' in response_text.lower():
+                plans_mentioned.append('free')
+            if 'pro plan' in response_text.lower():
+                plans_mentioned.append('pro')
+            if 'enterprise' in response_text.lower():
+                plans_mentioned.append('enterprise')
+            
+            # If not all three plans are mentioned, replace with complete pricing
+            if len(plans_mentioned) < 3:
+                complete_pricing = """Free Plan
+• 5 websites
+• All SEO tools
+• 0/month
+
+Pro Plan
+• 50 websites
+• Priority support
+• 49/month
+
+Enterprise
+• Unlimited sites
+• Dedicated manager
+• Custom pricing"""
+                
+                # Preserve follow-up question if exists
+                if "Have I resolved your query?" in response_text:
+                    response_text = complete_pricing + "\n\nHave I resolved your query?"
+                else:
+                    response_text = complete_pricing
         
         # ABSOLUTE FINAL DOMAIN FIX - One more pass to catch any remaining issues
         # Extract domains from user input one more time for final check
@@ -1592,12 +1831,12 @@ Please let me know if you have any SEO tool related questions?"""
             # Find and replace ANY variation of this domain
             domain_name = clean_domain.split('.')[0]
             domain_ext = clean_domain.split('.')[-1]
-            
+
             # Create a super aggressive pattern that catches ANY variation
             # This will match: domain. com, domain .com, domain. Com, domain .Com, etc.
             super_pattern = rf'{re.escape(domain_name)}\s*\.\s*{re.escape(domain_ext)}'
             response_text = re.sub(super_pattern, clean_domain, response_text, flags=re.IGNORECASE)
-            
+
             # Also fix if the extension got capitalized
             wrong_domain = f'{domain_name}.{domain_ext.capitalize()}'
             response_text = response_text.replace(wrong_domain, clean_domain)
