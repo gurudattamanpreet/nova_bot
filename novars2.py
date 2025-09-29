@@ -179,19 +179,19 @@ CONTACT INFORMATION:
 
 WEBSITE/DOMAIN FORMATTING RULES:
 - CRITICAL: Always write domain names correctly without spaces (example.com, not example. com)
-- NEVER write domains with spaces before extensions (knittingknot. Com is WRONG - use knittingknot.com)
+- NEVER write domains with spaces before extensions (example. Com is WRONG - use example.com)
 - NEVER capitalize domain extensions (.Com is wrong - use .com)
-- When user provides a website like "knittingknot.com", always refer to it EXACTLY as "knittingknot.com"
+- When user provides a website like "example.com", always refer to it EXACTLY as "example.com"
 - Never add spaces in domain names: website.com ✓, website. com ✗, website.Com ✗
 - Preserve exact domain formatting from user input
-- IMPORTANT: When instructing to enter a website, write it as "enter knittingknot.com" NOT "enter knittingknot. Com"
+- IMPORTANT: When instructing to enter a website, write it as "enter example.com" NOT "enter example. Com"
 - Always double-check domain formatting before sending response
 - Examples of CORRECT formatting:
-  * "enter knittingknot.com and tap Start"
+  * "enter example.com and tap Start"
   * "add example.com to the audit"
   * "visit website.org for more info"
 - Examples of WRONG formatting:
-  * "enter knittingknot. Com" (space before extension)
+  * "enter example. Com" (space before extension)
   * "add example.Com" (capital extension)
   * "visit website . org" (spaces around dot)
 
@@ -1462,10 +1462,10 @@ Have I resolved your query?"""
         response_text = response_text.replace('.ORG', '.org')
 
         # Specific fix for the exact pattern you're seeing
-        response_text = response_text.replace('knittingknot. Com', 'knittingknot.com')
-        response_text = response_text.replace('knittingknot. com', 'knittingknot.com')
-        response_text = response_text.replace('knittingknot .com', 'knittingknot.com')
-        response_text = response_text.replace('knittingknot . com', 'knittingknot.com')
+        response_text = response_text.replace('example. Com', 'example.com')
+        response_text = response_text.replace('example. com', 'example.com')
+        response_text = response_text.replace('example .com', 'example.com')
+        response_text = response_text.replace('example . com', 'example.com')
 
         # CRITICAL: Fix ALL domain names and URLs (not just emails)
         # Extract any URLs/domains from user input
