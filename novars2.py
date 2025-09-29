@@ -31,7 +31,7 @@ app = FastAPI(title="Novarsis Support Center", description="AI Support Assistant
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY",
                            "14bfe5365cc246dc82d933e3af2aa5b6.hz2asqgJi2bO_gpN7Cp1Hcku")  # Empty default, will be set via environment
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "https://ollama.com")  # Default to hosted service
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gpt-oss:120b")  # Default model
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gpt-oss:20b")  # Default model
 USE_HOSTED_OLLAMA = True  # Always use hosted service
 
 # Initialize Ollama model
