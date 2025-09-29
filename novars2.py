@@ -847,7 +847,7 @@ def format_pricing_plans(text: str) -> str:
         text = re.sub(r'(Enterprise:?)\s*([•\-])?\s*', r'\n\nEnterprise\n', text, flags=re.IGNORECASE)
 
         # Fix bullet points in pricing - ensure they're on new lines
-        text = re.sub(r'([^\n])\s*•\s*', r'\1\n• ', text)
+        text = re.sub(r'([^\n])•', r'\1\n• ', text)
         text = re.sub(r'([^\n])\s*\-\s*([A-Z])', r'\1\n- \2', text)
 
         # Fix pricing amounts that got merged
@@ -1277,7 +1277,8 @@ def fix_email_format(text: str) -> str:
     """Fix email formatting issues in the response - COMPREHENSIVE FIX"""
 
     # First, handle the double support@ issue specifically
-    text = re.sub(r'support@support@novarsistech\s*\.\s*[Cc]om', 'support@novarsistech.com', text, flags=re.IGNORECASE)
+    text = re.sub(r'support@support@novarsistech\.com', 'support@novarsistech.com', text, flags=re.IGNORECASE)
+    text = re.sub(r'support@support@', 'support@', text, flags=re.IGNORECASE)
 
     # Then, handle all other variations
     # Using a more aggressive approach
@@ -1352,9 +1353,10 @@ def get_ai_response(user_input: str, image_data: Optional[str] = None, chat_hist
         # Special handling for image attachments
         if image_data:
             # Check if the message is SEO-related or general error query
-            seo_image_keywords = ['error', 'seo', 'issue', 'problem', 'bug', 'fix', 'help', 'analyze', 'screenshot', 'tool', 'novarsis']
+            seo_image_keywords = ['error', 'seo', 'issue', 'problem', 'bug', 'fix', 'help', 'analyze', 'screenshot',
+                                  'tool', 'novarsis']
             is_seo_related_image = any(keyword in user_input.lower() for keyword in seo_image_keywords)
-            
+
             # If no context provided or it's clearly not SEO-related, filter it
             if not is_seo_related_image and not any(keyword in user_input.lower() for keyword in NOVARSIS_KEYWORDS):
                 return """Sorry, I only help with the Novarsis SEO Tool.
@@ -1420,10 +1422,10 @@ Please let me know if you have any SEO tool related questions?"""
 
         # Debug: Print the response before processing
         logger.info(f"Response received, length: {len(response_text)}")
-        
+
         # ULTRA EARLY PRICING FIX - If this is a pricing query, replace the ENTIRE response
-        if ('pricing' in user_input.lower() or 'plans' in user_input.lower() or 
-            'price' in user_input.lower() or 'cost' in user_input.lower()):
+        if ('pricing' in user_input.lower() or 'plans' in user_input.lower() or
+                'price' in user_input.lower() or 'cost' in user_input.lower()):
             # This is a pricing query - return the correct format immediately
             return """Free Plan
 • 5 websites
@@ -1694,14 +1696,13 @@ Have I resolved your query?"""
 
         # CRITICAL PRICING FIX - Complete replacement for any pricing response
         # This should happen EARLY in the processing pipeline
-        if ('pricing' in response_text.lower() or 'plans' in response_text.lower() or 
-            'free plan' in response_text.lower() or 'pro plan' in response_text.lower()):
-            
+        if ('pricing' in response_text.lower() or 'plans' in response_text.lower() or
+                'free plan' in response_text.lower() or 'pro plan' in response_text.lower()):
+
             # If we detect ANY pricing-related content, replace EVERYTHING with the correct format
-            if any(x in response_text.lower() for x in ['5 websites', '50 websites', 'unlimited sites', 
-                                                         'all seo tools', 'priority support', 'dedicated manager',
-                                                         '0/month', '49/month', 'custom pricing']):
-                
+            if any(x in response_text.lower() for x in ['5 websites', '50 websites', 'unlimited sites',
+                                                        'all seo tools', 'priority support', 'dedicated manager',
+                                                        '0/month', '49/month', 'custom pricing']):
                 # This is definitely a pricing response - replace it completely
                 response_text = """Free Plan
 • 5 websites
@@ -1719,10 +1720,10 @@ Enterprise
 • Custom pricing
 
 Have I resolved your query?"""
-                
+
                 # Skip all other formatting - return immediately
                 return response_text.strip()
-        
+
         # Format the response text to ensure proper bullet points and numbered lists
         response_text = format_response_text(response_text)
 
@@ -1844,8 +1845,8 @@ Have I resolved your query?"""
         )
 
         # FINAL PRICING CHECK - Ensure all three plans are shown
-        if ('pricing' in response_text.lower() or 'plans' in response_text.lower() or 
-            ('free plan' in response_text.lower() and '5 websites' in response_text.lower())):
+        if ('pricing' in response_text.lower() or 'plans' in response_text.lower() or
+                ('free plan' in response_text.lower() and '5 websites' in response_text.lower())):
             # Count how many plans are mentioned
             plans_mentioned = []
             if 'free plan' in response_text.lower():
@@ -1854,7 +1855,7 @@ Have I resolved your query?"""
                 plans_mentioned.append('pro')
             if 'enterprise' in response_text.lower():
                 plans_mentioned.append('enterprise')
-            
+
             # If not all three plans are mentioned, replace with complete pricing
             if len(plans_mentioned) < 3:
                 complete_pricing = """Free Plan
@@ -1871,13 +1872,13 @@ Enterprise
 • Unlimited sites
 • Dedicated manager
 • Custom pricing"""
-                
+
                 # Preserve follow-up question if exists
                 if "Have I resolved your query?" in response_text:
                     response_text = complete_pricing + "\n\nHave I resolved your query?"
                 else:
                     response_text = complete_pricing
-        
+
         # ABSOLUTE FINAL DOMAIN FIX - One more pass to catch any remaining issues
         # Extract domains from user input one more time for final check
         user_domains = re.findall(r'\b([a-zA-Z0-9-]+\.[a-zA-Z]{2,})\b', user_input, re.IGNORECASE)
@@ -1898,8 +1899,6 @@ Enterprise
             wrong_domain = f'{domain_name}. {domain_ext.capitalize()}'
             response_text = response_text.replace(wrong_domain, clean_domain)
             wrong_domain = f'{domain_name} . {domain_ext.capitalize()}'
-            response_text = response_text.replace(wrong_domain, clean_domain)
-            wrong_domain = f'{domain_name}. {domain_ext}'
             response_text = response_text.replace(wrong_domain, clean_domain)
 
         return response_text.strip()
@@ -1926,8 +1925,9 @@ async def chat(request: ChatRequest):
     # Special handling for image attachments
     if request.image_data:
         # Check if this is likely an SEO-related screenshot
-        seo_keywords = ['error', 'seo', 'issue', 'problem', 'fix', 'help', 'analyze', 'tool', 'novarsis', 'website', 'meta', 'tag', 'speed', 'mobile']
-        
+        seo_keywords = ['error', 'seo', 'issue', 'problem', 'fix', 'help', 'analyze', 'tool', 'novarsis', 'website',
+                        'meta', 'tag', 'speed', 'mobile']
+
         # If user hasn't provided context, check if it might be SEO-related
         if not request.message or request.message.strip() == "":
             request.message = "Please analyze this screenshot."
@@ -2103,8 +2103,8 @@ async def upload_file(file: UploadFile = File(...)):
 
     # Return with metadata for SEO error detection
     return {
-        "image_data": base64_image, 
-        "filename": file.filename, 
+        "image_data": base64_image,
+        "filename": file.filename,
         "content_type": file.content_type,
         "instructions": "Please attach this image and describe the SEO error you're seeing for best results."
     }
@@ -2209,12 +2209,12 @@ async def get_suggestions():
 async def get_typing_suggestions(request: dict):
     """Get real-time suggestions based on what user is typing."""
     user_input = request.get("input", "")
-    
+
     # Only show suggestions if user has typed at least 3 characters
     # This prevents suggestions from appearing immediately
     if len(user_input.strip()) < 3:
         return {"suggestions": []}
-    
+
     suggestions = get_context_suggestions(user_input)
     return {"suggestions": suggestions}
 
@@ -2872,7 +2872,7 @@ with open("templates/index.html", "w") as f:
 
         <div class="input-container">
             <div class="suggestions-container" id="suggestions-container">
-                <!-- Quick reply suggestions will be dynamically added here -->
+                <!-- Initial quick response suggestions will be dynamically added here -->
             </div>
 
             <form class="message-form" id="message-form">
@@ -2918,6 +2918,7 @@ with open("templates/index.html", "w") as f:
 
         // Close popup when clicking overlay
         document.getElementById('overlay').addEventListener('click', closeContactPopup);
+
         // Format time function
         function formatTime(timestamp) {
             const date = new Date(timestamp);
@@ -2932,8 +2933,8 @@ with open("templates/index.html", "w") as f:
                 initialTimestamp.textContent = formatTime(new Date());
             }
 
-            // Don't load initial suggestions on page load
-            // Suggestions will only appear after user stops typing for 3 seconds
+            // Load initial suggestions
+            loadInitialSuggestions();
         });
 
         // Chat container
@@ -2944,6 +2945,9 @@ with open("templates/index.html", "w") as f:
         const messageInput = document.getElementById('message-input');
         const attachmentBtn = document.getElementById('attachment-btn');
         const fileInput = document.getElementById('file-input');
+
+        // Suggestions container
+        const suggestionsContainer = document.getElementById('suggestions-container');
 
         // File handling
         let uploadedImageData = null;
@@ -3048,10 +3052,17 @@ with open("templates/index.html", "w") as f:
         }
 
         // Load initial suggestions
-        async function loadInitialSuggestions() {
-            // DON'T load any suggestions initially - user must type first
-            // Empty function - suggestions only appear after typing
-            return;
+        function loadInitialSuggestions() {
+            // Load initial quick response suggestions
+            const initialSuggestions = [
+                "How do I analyze my website SEO?",
+                "Check my subscription status",
+                "I'm getting an error message",
+                "Generate SEO report",
+                "Compare pricing plans",
+            ];
+
+            updateSuggestions(initialSuggestions);
         }
 
         /**
@@ -3065,7 +3076,7 @@ with open("templates/index.html", "w") as f:
          *   - User stops → after 500ms, ONE API call is made with "car"
          * - This prevents multiple API calls and improves performance
          */
-        
+
         // Typing suggestions with debouncing - 500ms after user stops typing
         let typingTimer;
         const DEBOUNCE_DELAY = 500; // 500ms debounce delay
@@ -3097,29 +3108,46 @@ with open("templates/index.html", "w") as f:
         // Handle input changes with debouncing
         messageInput.addEventListener('input', function(e) {
             const inputValue = e.target.value;
-            
+
             // Clear existing timer (debouncing)
             clearTimeout(typingTimer);
-            
+
             // Clear suggestions immediately while typing
             updateSuggestions([]);
-            
+
             // Set new timer - execute after user stops typing for 500ms
             typingTimer = setTimeout(() => {
                 // Only fetch suggestions if input has at least 3 characters
                 if (inputValue.trim().length >= 3) {
                     fetchTypingSuggestions(inputValue);
                 } else {
-                    // Keep suggestions empty for short input
-                    updateSuggestions([]);
+                    // If input is cleared or too short, show initial suggestions again
+                    if (inputValue.trim() === '') {
+                        loadInitialSuggestions();
+                    } else {
+                        // Keep suggestions empty for short input
+                        updateSuggestions([]);
+                    }
                 }
             }, DEBOUNCE_DELAY);
         });
 
-        // Handle focus - don't show suggestions immediately
+        // Handle focus - show initial suggestions
         messageInput.addEventListener('focus', function(e) {
-            // Don't show any suggestions on focus
-            // Suggestions will only appear after user stops typing for 3 seconds
+            // If input is empty, show initial suggestions
+            if (messageInput.value.trim() === '') {
+                loadInitialSuggestions();
+            }
+        });
+
+        // Handle blur - if input is empty, show initial suggestions
+        messageInput.addEventListener('blur', function(e) {
+            // Small delay to allow click events on suggestions to fire
+            setTimeout(() => {
+                if (messageInput.value.trim() === '') {
+                    loadInitialSuggestions();
+                }
+            }, 200);
         });
 
         // Send message
@@ -3145,8 +3173,7 @@ with open("templates/index.html", "w") as f:
 
                 // Load initial suggestions after a delay
                 setTimeout(() => {
-                    // Don't load suggestions - user must type first
-                    updateSuggestions([]);
+                    loadInitialSuggestions();
                 }, 500);
                 return;
             }
@@ -3182,9 +3209,9 @@ with open("templates/index.html", "w") as f:
                 // Add bot response
                 addMessage('assistant', data.response, data.show_feedback);
 
-                // Don't load suggestions after response - user must type
+                // Load initial suggestions after response
                 setTimeout(() => {
-                    updateSuggestions([]);
+                    loadInitialSuggestions();
                 }, 500);
 
                 // Reset attachment
@@ -3204,9 +3231,9 @@ with open("templates/index.html", "w") as f:
                 console.error('Error sending message:', error);
                 typingIndicator.remove();
                 addMessage('assistant', 'Sorry, I encountered an error. Please try again.', true);
-                // Don't show suggestions on error - user must type
+                // Load initial suggestions on error
                 setTimeout(() => {
-                    updateSuggestions([]);
+                    loadInitialSuggestions();
                 }, 500);
             }
         }
@@ -3223,7 +3250,7 @@ with open("templates/index.html", "w") as f:
                     },
                     body: JSON.stringify({
                         feedback: feedback,
-                        message_index: messageIndex
+                        message_index: message_index
                     })
                 });
 
