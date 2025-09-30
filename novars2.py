@@ -19,6 +19,14 @@ import hashlib
 import html
 import uvicorn
 import re
+import uuid
+from pymongo import MongoClient
+from dotenv import load_dotenv
+import certifi
+import atexit
+
+# Load environment variables
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -26,6 +34,262 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(title="Novarsis Support Center", description="AI Support Assistant for Novarsis SEO Tool")
+
+# ================== MONGODB INTEGRATION START ==================
+class ChatDatabase:
+    """MongoDB handler for Novarsis Chatbot - All in one file"""
+    
+    def __init__(self):
+        """Initialize MongoDB connection"""
+        self.connected = False
+        self.client = None
+        self.db = None
+        
+        try:
+            # Get connection string from environment
+            connection_string = os.getenv('MONGODB_URL')
+            if not connection_string:
+                logger.warning("MONGODB_URL not found in .env file. Running without database.")
+                return
+            
+            # Connect to MongoDB Atlas
+            self.client = MongoClient(
+                connection_string,
+                tlsCAFile=certifi.where(),
+                serverSelectionTimeoutMS=5000
+            )
+            
+            # Test connection
+            self.client.admin.command('ping')
+            
+            # Select database
+            self.db = self.client['novarsis_chatbot']
+            
+            # Create collections
+            self.sessions = self.db['sessions']
+            self.messages = self.db['messages']
+            self.users = self.db['users']
+            self.error_logs = self.db['error_logs']
+            self.feedback = self.db['feedback']
+            
+            self.connected = True
+            logger.info("✅ MongoDB connected successfully!")
+            
+        except Exception as e:
+            logger.error(f"❌ MongoDB connection failed: {str(e)}")
+            logger.info("Running without database - data will not be persisted")
+            self.connected = False
+    
+    def is_connected(self):
+        """Check if database is connected"""
+        return self.connected
+    
+    def create_session(self, user_email: Optional[str] = None, platform: str = "web") -> str:
+        """Create a new chat session"""
+        session_id = str(uuid.uuid4())
+        
+        if not self.connected:
+            return session_id
+        
+        try:
+            session_data = {
+                "session_id": session_id,
+                "user_email": user_email,
+                "platform": platform,
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow(),
+                "status": "active",
+                "message_count": 0,
+                "resolved": False
+            }
+            
+            self.sessions.insert_one(session_data)
+            logger.info(f"📝 New session created: {session_id}")
+            return session_id
+            
+        except Exception as e:
+            logger.error(f"Error creating session: {str(e)}")
+            return session_id
+    
+    def get_session(self, session_id: str) -> Optional[Dict]:
+        """Get session by ID"""
+        if not self.connected:
+            return None
+        
+        try:
+            session = self.sessions.find_one({"session_id": session_id})
+            if session:
+                session.pop('_id', None)
+            return session
+        except Exception as e:
+            logger.error(f"Error getting session: {str(e)}")
+            return None
+    
+    def save_message(self, session_id: str, role: str, content: str, 
+                    image_data: Optional[str] = None) -> str:
+        """Save a message to database"""
+        message_id = str(uuid.uuid4())
+        
+        if not self.connected:
+            return message_id
+        
+        try:
+            message_data = {
+                "message_id": message_id,
+                "session_id": session_id,
+                "role": role,
+                "content": content,
+                "image_data": image_data,
+                "timestamp": datetime.utcnow(),
+                "feedback": None
+            }
+            
+            self.messages.insert_one(message_data)
+            
+            # Update session message count
+            self.sessions.update_one(
+                {"session_id": session_id},
+                {
+                    "$inc": {"message_count": 1},
+                    "$set": {"updated_at": datetime.utcnow()}
+                }
+            )
+            
+            logger.info(f"💬 Message saved: {role} - {content[:50]}...")
+            return message_id
+            
+        except Exception as e:
+            logger.error(f"Error saving message: {str(e)}")
+            return message_id
+    
+    def get_chat_history(self, session_id: str, limit: int = 50) -> List[Dict]:
+        """Get chat history for a session"""
+        if not self.connected:
+            return []
+        
+        try:
+            messages = list(self.messages.find(
+                {"session_id": session_id}
+            ).sort("timestamp", 1).limit(limit))
+            
+            for msg in messages:
+                msg.pop('_id', None)
+            
+            return messages
+            
+        except Exception as e:
+            logger.error(f"Error getting chat history: {str(e)}")
+            return []
+    
+    def save_feedback(self, session_id: str, message_id: str, feedback_type: str) -> bool:
+        """Save user feedback"""
+        if not self.connected:
+            return False
+        
+        try:
+            feedback_data = {
+                "session_id": session_id,
+                "message_id": message_id,
+                "feedback": feedback_type,
+                "timestamp": datetime.utcnow()
+            }
+            
+            self.feedback.insert_one(feedback_data)
+            
+            # Update message with feedback
+            self.messages.update_one(
+                {"message_id": message_id},
+                {"$set": {"feedback": feedback_type}}
+            )
+            
+            logger.info(f"👍 Feedback saved: {feedback_type}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error saving feedback: {str(e)}")
+            return False
+    
+    def save_user(self, email: str, name: Optional[str] = None) -> str:
+        """Save or update user information"""
+        if not self.connected:
+            return email
+        
+        try:
+            self.users.update_one(
+                {"email": email},
+                {
+                    "$set": {"last_seen": datetime.utcnow(), "name": name},
+                    "$setOnInsert": {"created_at": datetime.utcnow()}
+                },
+                upsert=True
+            )
+            
+            logger.info(f"👤 User saved: {email}")
+            return email
+            
+        except Exception as e:
+            logger.error(f"Error saving user: {str(e)}")
+            return email
+    
+    def get_stats(self) -> Dict:
+        """Get chatbot statistics"""
+        if not self.connected:
+            return {"status": "Database not connected"}
+        
+        try:
+            total_sessions = self.sessions.count_documents({})
+            total_messages = self.messages.count_documents({})
+            total_users = self.users.count_documents({})
+            active_sessions = self.sessions.count_documents({"status": "active"})
+            
+            # Get feedback stats
+            helpful_count = self.feedback.count_documents({"feedback": "helpful"})
+            not_helpful_count = self.feedback.count_documents({"feedback": "not_helpful"})
+            
+            stats = {
+                "total_sessions": total_sessions,
+                "total_messages": total_messages,
+                "total_users": total_users,
+                "active_sessions": active_sessions,
+                "helpful_feedback": helpful_count,
+                "not_helpful_feedback": not_helpful_count,
+                "satisfaction_rate": (helpful_count / (helpful_count + not_helpful_count) * 100) if (helpful_count + not_helpful_count) > 0 else 0
+            }
+            
+            return stats
+            
+        except Exception as e:
+            logger.error(f"Error getting stats: {str(e)}")
+            return {}
+    
+    def close(self):
+        """Close database connection"""
+        try:
+            if self.client:
+                self.client.close()
+                logger.info("🔒 MongoDB connection closed")
+        except:
+            pass
+
+# Initialize MongoDB connection
+try:
+    db = ChatDatabase()
+    if db.is_connected():
+        logger.info("✅ MongoDB integrated with Novarsis Chatbot")
+    else:
+        logger.info("⚠️ Running without MongoDB - data will not be persisted")
+except Exception as e:
+    logger.error(f"Failed to initialize MongoDB: {str(e)}")
+    db = None
+
+# Register cleanup on exit
+def cleanup_mongodb():
+    """Cleanup function to close MongoDB connection"""
+    if db:
+        db.close()
+
+atexit.register(cleanup_mongodb)
+# ================== MONGODB INTEGRATION END ==================
 
 # Configure Ollama API - UPDATED FOR HOSTED SERVICE
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY",
@@ -593,6 +857,8 @@ class ChatRequest(BaseModel):
     image_data: Optional[str] = None
     platform: str = "mobile"  # Added platform identifier
     device_info: Optional[Dict] = None  # Device info for better responses
+    session_id: Optional[str] = None  # MongoDB session ID
+    message_id: Optional[str] = None  # MongoDB message ID
 
 
 class FeedbackRequest(BaseModel):
@@ -1919,6 +2185,45 @@ async def read_root(request: Request):
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
+    # ========== MONGODB INTEGRATION START ==========
+    session_id = request.session_id
+    message_id = None
+    chat_history_for_ai = []
+    
+    # Save to MongoDB if available
+    if db and db.is_connected():
+        try:
+            # Create or get session
+            if not session_id:
+                session_id = db.create_session(platform=request.platform)
+            else:
+                # Check if session exists
+                existing = db.get_session(session_id)
+                if not existing:
+                    session_id = db.create_session(platform=request.platform)
+            
+            # Save user message
+            db.save_message(
+                session_id=session_id,
+                role="user",
+                content=request.message,
+                image_data=request.image_data
+            )
+            
+            # Get chat history from MongoDB
+            mongo_history = db.get_chat_history(session_id)
+            if mongo_history:
+                for msg in mongo_history:
+                    chat_history_for_ai.append({
+                        "role": msg.get("role"),
+                        "content": msg.get("content")
+                    })
+        except Exception as e:
+            logger.error(f"MongoDB operation failed: {str(e)}")
+            # Continue without MongoDB
+    
+    # ========== MONGODB INTEGRATION END ==========
+    
     # Check if request is from mobile
     is_mobile = request.platform == "mobile"
 
