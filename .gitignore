@@ -11,3 +11,10 @@ venv/
 .env.local
 .idea/
 .vscode/
+
+# Add these for MongoDB
+*.bson
+dump/
+mongodb_data/
+.env.production
+.env.development
