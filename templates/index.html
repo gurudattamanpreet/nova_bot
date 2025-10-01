@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Novarsis Support Center API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #333; }
+        .status { 
+            background: #4CAF50; 
+            color: white; 
+            padding: 10px; 
+            border-radius: 5px; 
+            display: inline-block;
+        }
+        .endpoint {
+            background: #f0f0f0;
+            padding: 10px;
+            margin: 10px 0;
+            border-left: 3px solid #2196F3;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 Novarsis Support Center API</h1>
+        <p class="status">✅ API is running successfully!</p>
+        
+        <h2>Available Endpoints:</h2>
+        <div class="endpoint">
+            <strong>POST /api/chat</strong><br>
+            Send messages to the chatbot
+        </div>
+        <div class="endpoint">
+            <strong>POST /api/feedback</strong><br>
+            Submit feedback for responses
+        </div>
+        <div class="endpoint">
+            <strong>GET /api/stats</strong><br>
+            Get chatbot statistics
+        </div>
+        
+        <h3>Test the API:</h3>
+        <pre>
+curl -X POST https://your-app.onrender.com/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Hello"}'
+        </pre>
+    </div>
+</body>
+</html>
