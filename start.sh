@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # Print environment info for debugging
 echo "🚀 Starting Novarsis Chatbot on Render"
 echo "📊 Python Version: $(python --version)"
@@ -18,6 +17,8 @@ fi
 # Check other required env vars
 if [ -z "$OLLAMA_API_KEY" ]; then
     echo "⚠️  WARNING: OLLAMA_API_KEY not found"
+else
+    echo "✅ OLLAMA_API_KEY is configured"
 fi
 
 # Print all environment variables (without sensitive data) for debugging
@@ -28,4 +29,5 @@ echo "🌐 Starting server on port: ${PORT:-8000}"
 echo "======================================"
 
 # Start the application with proper host and port binding
-uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --log-level info
+# IMPORTANT: Changed main:app to novars2:app
+uvicorn novars2:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --log-level info
