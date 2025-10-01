@@ -45,7 +45,6 @@ class ChatDatabase:
         self.connected = False
         self.client = None
         self.db = None
-        self.connection_error = None  # Store connection error details
 
         try:
             # Get connection string from environment
@@ -54,8 +53,7 @@ class ChatDatabase:
                 # Try alternative environment variable names (Render might use different names)
                 connection_string = os.getenv('MONGODB_URI') or os.getenv('DATABASE_URL')
                 if not connection_string:
-                    self.connection_error = "MongoDB connection string not found in environment variables"
-                    logger.warning(f"❌ {self.connection_error}")
+                    logger.warning("MongoDB connection string not found. Running without database.")
                     logger.info("Set MONGODB_URL in Render environment variables.")
                     return
 
@@ -84,15 +82,14 @@ class ChatDatabase:
             for attempt in range(max_retries):
                 try:
                     self.client.admin.command('ping')
-                    logger.info(f"✅ MongoDB ping successful on attempt {attempt + 1}")
+                    logger.info(f"MongoDB ping successful on attempt {attempt + 1}")
                     break
                 except Exception as ping_error:
-                    logger.warning(f"❌ MongoDB ping attempt {attempt + 1} failed: {str(ping_error)}")
+                    logger.warning(f"MongoDB ping attempt {attempt + 1} failed: {str(ping_error)}")
                     if attempt < max_retries - 1:
                         time.sleep(2 ** attempt)  # Exponential backoff: 1, 2, 4 seconds
                     else:
-                        self.connection_error = f"MongoDB ping failed after {max_retries} attempts: {str(ping_error)}"
-                        raise Exception(self.connection_error)
+                        raise ping_error
 
             # Select database
             self.db = self.client['novarsis_chatbot']
@@ -108,18 +105,13 @@ class ChatDatabase:
             logger.info("✅ MongoDB connected successfully!")
 
         except Exception as e:
-            self.connection_error = str(e)
-            logger.error(f"❌ MongoDB connection failed: {self.connection_error}")
+            logger.error(f"❌ MongoDB connection failed: {str(e)}")
             logger.info("Running without database - data will not be persisted")
             self.connected = False
 
     def is_connected(self):
         """Check if database is connected"""
         return self.connected
-
-    def get_connection_error(self):
-        """Get the connection error message if connection failed"""
-        return self.connection_error
 
     def create_session(self, user_email: Optional[str] = None, platform: str = "web") -> str:
         """Create a new chat session"""
@@ -319,7 +311,7 @@ class ChatDatabase:
                 "helpful_feedback": helpful_count,
                 "not_helpful_feedback": not_helpful_count,
                 "satisfaction_rate": (helpful_count / (helpful_count + not_helpful_count) * 100) if (
-                                                                                                            helpful_count + not_helpful_count) > 0 else 0
+                                                                                                                helpful_count + not_helpful_count) > 0 else 0
             }
 
             return stats
@@ -377,7 +369,7 @@ atexit.register(cleanup_mongodb)
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY",
                            "14bfe5365cc246dc82d933e3af2aa5b6.hz2asqgJi2bO_gpN7Cp1Hcku")  # Empty default, will be set via environment
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "https://ollama.com")  # Default to hosted service
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gpt-oss:20b")  # Default model
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "codellama:13b")  # Default model
 USE_HOSTED_OLLAMA = True  # Always use hosted service
 
 # Initialize Ollama model
@@ -396,12 +388,42 @@ SUPPORT_EMAIL = "support@novarsistech.com"
 # Enhanced System Prompt - MOBILE APP OPTIMIZED
 SYSTEM_PROMPT = """You are Nova, an AI assistant for Novarsis SEO Tool. Your role is to help users with SEO analysis, reports, account issues, and technical support.
 
+CRITICAL FORMATTING INSTRUCTIONS:
+1. ALWAYS put a space between words. Never combine words together.
+2. ALWAYS use proper line breaks:
+   - After each numbered point
+   - Between paragraphs
+   - Before bullet points
+3. For numbered lists:
+   - Write: "1. First point here"
+   - NOT: "1.\nFirst point here"
+4. Maintain proper spacing:
+   - Use single space between words
+   - Use double line break between sections
+5. NEVER merge words like "thisisaclaude" - always "this is a claude"
+6. Always ensure proper grammar with spaces between ALL words
+
 IMPORTANT EMAIL RULES:
 - NEVER ask users for their email address
 - If a user voluntarily provides their email, acknowledge it properly
 - Do not request email for connecting with experts or support
 - Simply provide the support email (support@novarsistech.com) when needed
 - Never say things like "Could you share your email address?" or "Please provide your email"
+
+FORMATTING_RULES =
+CRITICAL FORMATTING INSTRUCTIONS:
+1. ALWAYS put a space between words. Never combine words together.
+2. ALWAYS use proper line breaks:
+   - After each numbered point
+   - Between paragraphs
+   - Before bullet points
+3. For numbered lists:
+   - Write: "1. First point here"
+   - NOT: "1.\nFirst point here"
+4. Maintain proper spacing:
+   - Use single space between words
+   - Use double line break between sections
+5. NEVER merge words like "thisisaclaude" - always "this is a claude"
 
 IMAGE ANALYSIS CAPABILITIES:
 When a user attaches an image containing SEO errors or issues:
@@ -1040,7 +1062,7 @@ def call_ollama_api(prompt: str, image_data: Optional[str] = None) -> str:
                 "model": OLLAMA_MODEL,
                 "messages": messages,
                 "stream": False,
-                "temperature": 0.7
+                "temperature": 0.3
             }
             endpoint = f"{OLLAMA_BASE_URL}/v1/chat/completions"  # OpenAI compatible endpoint
         else:
@@ -2633,37 +2655,6 @@ async def get_conversation_pairs_endpoint(session_id: str):
         return {"pairs": []}
 
 
-# MongoDB Status Endpoint
-@app.get("/api/mongodb-status")
-async def mongodb_status():
-    """Check MongoDB connection status"""
-    global db
-    if db is None:
-        db = get_db()
-
-    if db and db.is_connected():
-        try:
-            # Test the connection
-            db.client.admin.command('ping')
-            stats = db.get_stats()
-            return {
-                "status": "connected",
-                "message": "MongoDB connection is active",
-                "stats": stats
-            }
-        except Exception as e:
-            return {
-                "status": "error",
-                "message": f"MongoDB connection error: {str(e)}"
-            }
-    else:
-        error_msg = db.get_connection_error() if db else "Database not initialized"
-        return {
-            "status": "disconnected",
-            "message": f"MongoDB is not connected: {error_msg}"
-        }
-
-
 # Create templates directory if it doesn't exist
 os.makedirs("templates", exist_ok=True)
 
@@ -3695,7 +3686,7 @@ with open("templates/index.html", "w") as f:
                     },
                     body: JSON.stringify({
                         feedback: feedback,
-                        message_index: messageIndex
+                        message_index: message_index
                     })
                 });
 
