@@ -20,6 +20,10 @@ if [ -z "$OLLAMA_API_KEY" ]; then
     echo "⚠️  WARNING: OLLAMA_API_KEY not found"
 fi
 
+# Print all environment variables (without sensitive data) for debugging
+echo "📋 Environment Variables:"
+env | grep -E "(MONGODB|DATABASE|OLLAMA|PORT)" | sed 's/mongodb+srv:\/\/[^@]*@/***@/'
+
 echo "🌐 Starting server on port: ${PORT:-8000}"
 echo "======================================"
 
