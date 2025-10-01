@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: novarsis-chatbot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn novars2:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: MONGODB_URL
+        sync: false
+      - key: OLLAMA_API_KEY
+        sync: false
+      - key: OLLAMA_BASE_URL
+        value: https://ollama.com
+      - key: OLLAMA_MODEL
+        value: codellama:13b
