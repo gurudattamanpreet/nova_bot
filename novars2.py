@@ -35,62 +35,99 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI(title="Novarsis Support Center", description="AI Support Assistant for Novarsis SEO Tool")
 
+
 # ================== MONGODB INTEGRATION START ==================
 class ChatDatabase:
     """MongoDB handler for Novarsis Chatbot - All in one file"""
-    
+
     def __init__(self):
-        """Initialize MongoDB connection"""
+        """Initialize MongoDB connection with Render compatibility"""
         self.connected = False
         self.client = None
         self.db = None
-        
+        self.connection_error = None  # Store connection error details
+
         try:
             # Get connection string from environment
             connection_string = os.getenv('MONGODB_URL')
             if not connection_string:
-                logger.warning("MONGODB_URL not found in .env file. Running without database.")
-                return
-            
-            # Connect to MongoDB Atlas
+                # Try alternative environment variable names (Render might use different names)
+                connection_string = os.getenv('MONGODB_URI') or os.getenv('DATABASE_URL')
+                if not connection_string:
+                    self.connection_error = "MongoDB connection string not found in environment variables"
+                    logger.warning(f"❌ {self.connection_error}")
+                    logger.info("Set MONGODB_URL in Render environment variables.")
+                    return
+
+            # Log connection attempt (without showing password)
+            safe_url = connection_string.split('@')[1] if '@' in connection_string else 'connection_string'
+            logger.info(f"Attempting MongoDB connection to: ...@{safe_url[:20]}...")
+
+            # Connect to MongoDB Atlas with Render-optimized settings
             self.client = MongoClient(
                 connection_string,
                 tlsCAFile=certifi.where(),
-                serverSelectionTimeoutMS=5000
+                serverSelectionTimeoutMS=20000,  # Increased timeout for Render
+                connectTimeoutMS=20000,
+                socketTimeoutMS=20000,
+                retryWrites=True,
+                w='majority',
+                # Important for Render deployment
+                tls=True,
+                tlsAllowInvalidCertificates=False,
+                maxPoolSize=10,
+                minPoolSize=1
             )
-            
-            # Test connection
-            self.client.admin.command('ping')
-            
+
+            # Test connection with retry for slow Render cold starts
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    self.client.admin.command('ping')
+                    logger.info(f"✅ MongoDB ping successful on attempt {attempt + 1}")
+                    break
+                except Exception as ping_error:
+                    logger.warning(f"❌ MongoDB ping attempt {attempt + 1} failed: {str(ping_error)}")
+                    if attempt < max_retries - 1:
+                        time.sleep(2 ** attempt)  # Exponential backoff: 1, 2, 4 seconds
+                    else:
+                        self.connection_error = f"MongoDB ping failed after {max_retries} attempts: {str(ping_error)}"
+                        raise Exception(self.connection_error)
+
             # Select database
             self.db = self.client['novarsis_chatbot']
-            
+
             # Create collections
             self.sessions = self.db['sessions']
             self.messages = self.db['messages']
             self.users = self.db['users']
             self.error_logs = self.db['error_logs']
             self.feedback = self.db['feedback']
-            
+
             self.connected = True
             logger.info("✅ MongoDB connected successfully!")
-            
+
         except Exception as e:
-            logger.error(f"❌ MongoDB connection failed: {str(e)}")
+            self.connection_error = str(e)
+            logger.error(f"❌ MongoDB connection failed: {self.connection_error}")
             logger.info("Running without database - data will not be persisted")
             self.connected = False
-    
+
     def is_connected(self):
         """Check if database is connected"""
         return self.connected
-    
+
+    def get_connection_error(self):
+        """Get the connection error message if connection failed"""
+        return self.connection_error
+
     def create_session(self, user_email: Optional[str] = None, platform: str = "web") -> str:
         """Create a new chat session"""
         session_id = str(uuid.uuid4())
-        
+
         if not self.connected:
             return session_id
-        
+
         try:
             session_data = {
                 "session_id": session_id,
@@ -102,20 +139,20 @@ class ChatDatabase:
                 "message_count": 0,
                 "resolved": False
             }
-            
+
             self.sessions.insert_one(session_data)
             logger.info(f"📝 New session created: {session_id}")
             return session_id
-            
+
         except Exception as e:
             logger.error(f"Error creating session: {str(e)}")
             return session_id
-    
+
     def get_session(self, session_id: str) -> Optional[Dict]:
         """Get session by ID"""
         if not self.connected:
             return None
-        
+
         try:
             session = self.sessions.find_one({"session_id": session_id})
             if session:
@@ -124,15 +161,15 @@ class ChatDatabase:
         except Exception as e:
             logger.error(f"Error getting session: {str(e)}")
             return None
-    
-    def save_message(self, session_id: str, role: str, content: str, 
-                    image_data: Optional[str] = None) -> str:
-        """Save a message to database"""
+
+    def save_message(self, session_id: str, role: str, content: str,
+                     image_data: Optional[str] = None, user_prompt: Optional[str] = None) -> str:
+        """Save a message to database with user prompt for responses"""
         message_id = str(uuid.uuid4())
-        
+
         if not self.connected:
             return message_id
-        
+
         try:
             message_data = {
                 "message_id": message_id,
@@ -141,11 +178,12 @@ class ChatDatabase:
                 "content": content,
                 "image_data": image_data,
                 "timestamp": datetime.utcnow(),
-                "feedback": None
+                "feedback": None,
+                "user_prompt": user_prompt  # Store the user's prompt that triggered this response
             }
-            
+
             self.messages.insert_one(message_data)
-            
+
             # Update session message count
             self.sessions.update_one(
                 {"session_id": session_id},
@@ -154,38 +192,65 @@ class ChatDatabase:
                     "$set": {"updated_at": datetime.utcnow()}
                 }
             )
-            
+
             logger.info(f"💬 Message saved: {role} - {content[:50]}...")
+            if user_prompt:
+                logger.info(f"📝 Associated with user prompt: {user_prompt[:50]}...")
             return message_id
-            
+
         except Exception as e:
             logger.error(f"Error saving message: {str(e)}")
             return message_id
-    
+
     def get_chat_history(self, session_id: str, limit: int = 50) -> List[Dict]:
-        """Get chat history for a session"""
+        """Get chat history for a session with prompts and responses paired"""
         if not self.connected:
             return []
-        
+
         try:
             messages = list(self.messages.find(
                 {"session_id": session_id}
             ).sort("timestamp", 1).limit(limit))
-            
+
             for msg in messages:
                 msg.pop('_id', None)
-            
+
             return messages
-            
+
         except Exception as e:
             logger.error(f"Error getting chat history: {str(e)}")
             return []
-    
+
+    def get_conversation_pairs(self, session_id: str, limit: int = 50) -> List[Dict]:
+        """Get conversation as prompt-response pairs"""
+        if not self.connected:
+            return []
+
+        try:
+            messages = list(self.messages.find(
+                {"session_id": session_id}
+            ).sort("timestamp", 1).limit(limit))
+
+            pairs = []
+            for msg in messages:
+                if msg.get('role') == 'assistant' and msg.get('user_prompt'):
+                    pairs.append({
+                        "prompt": msg.get('user_prompt'),
+                        "response": msg.get('content'),
+                        "timestamp": msg.get('timestamp')
+                    })
+
+            return pairs
+
+        except Exception as e:
+            logger.error(f"Error getting conversation pairs: {str(e)}")
+            return []
+
     def save_feedback(self, session_id: str, message_id: str, feedback_type: str) -> bool:
         """Save user feedback"""
         if not self.connected:
             return False
-        
+
         try:
             feedback_data = {
                 "session_id": session_id,
@@ -193,27 +258,27 @@ class ChatDatabase:
                 "feedback": feedback_type,
                 "timestamp": datetime.utcnow()
             }
-            
+
             self.feedback.insert_one(feedback_data)
-            
+
             # Update message with feedback
             self.messages.update_one(
                 {"message_id": message_id},
                 {"$set": {"feedback": feedback_type}}
             )
-            
+
             logger.info(f"👍 Feedback saved: {feedback_type}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Error saving feedback: {str(e)}")
             return False
-    
+
     def save_user(self, email: str, name: Optional[str] = None) -> str:
         """Save or update user information"""
         if not self.connected:
             return email
-        
+
         try:
             self.users.update_one(
                 {"email": email},
@@ -223,29 +288,29 @@ class ChatDatabase:
                 },
                 upsert=True
             )
-            
+
             logger.info(f"👤 User saved: {email}")
             return email
-            
+
         except Exception as e:
             logger.error(f"Error saving user: {str(e)}")
             return email
-    
+
     def get_stats(self) -> Dict:
         """Get chatbot statistics"""
         if not self.connected:
             return {"status": "Database not connected"}
-        
+
         try:
             total_sessions = self.sessions.count_documents({})
             total_messages = self.messages.count_documents({})
             total_users = self.users.count_documents({})
             active_sessions = self.sessions.count_documents({"status": "active"})
-            
+
             # Get feedback stats
             helpful_count = self.feedback.count_documents({"feedback": "helpful"})
             not_helpful_count = self.feedback.count_documents({"feedback": "not_helpful"})
-            
+
             stats = {
                 "total_sessions": total_sessions,
                 "total_messages": total_messages,
@@ -253,15 +318,16 @@ class ChatDatabase:
                 "active_sessions": active_sessions,
                 "helpful_feedback": helpful_count,
                 "not_helpful_feedback": not_helpful_count,
-                "satisfaction_rate": (helpful_count / (helpful_count + not_helpful_count) * 100) if (helpful_count + not_helpful_count) > 0 else 0
+                "satisfaction_rate": (helpful_count / (helpful_count + not_helpful_count) * 100) if (
+                                                                                                            helpful_count + not_helpful_count) > 0 else 0
             }
-            
+
             return stats
-            
+
         except Exception as e:
             logger.error(f"Error getting stats: {str(e)}")
             return {}
-    
+
     def close(self):
         """Close database connection"""
         try:
@@ -271,22 +337,38 @@ class ChatDatabase:
         except:
             pass
 
-# Initialize MongoDB connection
-try:
-    db = ChatDatabase()
-    if db.is_connected():
-        logger.info("✅ MongoDB integrated with Novarsis Chatbot")
-    else:
-        logger.info("⚠️ Running without MongoDB - data will not be persisted")
-except Exception as e:
-    logger.error(f"Failed to initialize MongoDB: {str(e)}")
-    db = None
+
+# Initialize MongoDB connection with lazy loading for Render
+db = None
+
+
+def get_db():
+    """Get or create database connection (lazy initialization for Render)"""
+    global db
+    if db is None:
+        try:
+            logger.info("Initializing MongoDB connection...")
+            db = ChatDatabase()
+            if db.is_connected():
+                logger.info("✅ MongoDB integrated with Novarsis Chatbot")
+            else:
+                logger.info("⚠️ Running without MongoDB - data will not be persisted")
+        except Exception as e:
+            logger.error(f"Failed to initialize MongoDB: {str(e)}")
+            db = ChatDatabase()  # Create empty instance to prevent repeated attempts
+    return db
+
+
+# Initialize on first request instead of startup (better for Render)
+db = get_db()
+
 
 # Register cleanup on exit
 def cleanup_mongodb():
     """Cleanup function to close MongoDB connection"""
     if db:
         db.close()
+
 
 atexit.register(cleanup_mongodb)
 # ================== MONGODB INTEGRATION END ==================
@@ -2189,7 +2271,7 @@ async def chat(request: ChatRequest):
     session_id = request.session_id
     message_id = None
     chat_history_for_ai = []
-    
+
     # Save to MongoDB if available
     if db and db.is_connected():
         try:
@@ -2201,15 +2283,16 @@ async def chat(request: ChatRequest):
                 existing = db.get_session(session_id)
                 if not existing:
                     session_id = db.create_session(platform=request.platform)
-            
+
             # Save user message
-            db.save_message(
+            user_message_id = db.save_message(
                 session_id=session_id,
                 role="user",
                 content=request.message,
-                image_data=request.image_data
+                image_data=request.image_data,
+                user_prompt=None  # User messages don't have a prompt
             )
-            
+
             # Get chat history from MongoDB
             mongo_history = db.get_chat_history(session_id)
             if mongo_history:
@@ -2221,9 +2304,9 @@ async def chat(request: ChatRequest):
         except Exception as e:
             logger.error(f"MongoDB operation failed: {str(e)}")
             # Continue without MongoDB
-    
+
     # ========== MONGODB INTEGRATION END ==========
-    
+
     # Check if request is from mobile
     is_mobile = request.platform == "mobile"
 
@@ -2354,6 +2437,21 @@ support@novarsistech.com"""
         "show_feedback": show_feedback
     }
     session_state["chat_history"].append(bot_message)
+
+    # Save assistant response to MongoDB with user prompt reference
+    if db and db.is_connected():
+        try:
+            # Save assistant message with reference to the user's prompt
+            assistant_message_id = db.save_message(
+                session_id=session_id,
+                role="assistant",
+                content=response,
+                image_data=None,  # Assistant doesn't have image data
+                user_prompt=request.message  # Store the user's prompt that triggered this response
+            )
+            logger.info(f"Saved assistant response with user prompt reference: {assistant_message_id}")
+        except Exception as e:
+            logger.error(f"Failed to save assistant response to MongoDB: {str(e)}")
 
     # Don't send suggestions with response anymore since we're doing real-time
     # Mobile-optimized response with additional metadata
@@ -2522,6 +2620,48 @@ async def get_typing_suggestions(request: dict):
 
     suggestions = get_context_suggestions(user_input)
     return {"suggestions": suggestions}
+
+
+# New endpoint to get conversation pairs with both prompts and responses
+@app.get("/api/conversation-pairs/{session_id}")
+async def get_conversation_pairs_endpoint(session_id: str):
+    """Get conversation as prompt-response pairs for a session"""
+    if db and db.is_connected():
+        pairs = db.get_conversation_pairs(session_id)
+        return {"pairs": pairs}
+    else:
+        return {"pairs": []}
+
+
+# MongoDB Status Endpoint
+@app.get("/api/mongodb-status")
+async def mongodb_status():
+    """Check MongoDB connection status"""
+    global db
+    if db is None:
+        db = get_db()
+
+    if db and db.is_connected():
+        try:
+            # Test the connection
+            db.client.admin.command('ping')
+            stats = db.get_stats()
+            return {
+                "status": "connected",
+                "message": "MongoDB connection is active",
+                "stats": stats
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"MongoDB connection error: {str(e)}"
+            }
+    else:
+        error_msg = db.get_connection_error() if db else "Database not initialized"
+        return {
+            "status": "disconnected",
+            "message": f"MongoDB is not connected: {error_msg}"
+        }
 
 
 # Create templates directory if it doesn't exist
@@ -3555,7 +3695,7 @@ with open("templates/index.html", "w") as f:
                     },
                     body: JSON.stringify({
                         feedback: feedback,
-                        message_index: message_index
+                        message_index: messageIndex
                     })
                 });
 
