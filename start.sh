@@ -28,4 +28,4 @@ echo "🌐 Starting server on port: ${PORT:-8000}"
 echo "======================================"
 
 # Start the application with proper host and port binding
-uvicorn novars2:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --log-level info
+uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --log-level info
