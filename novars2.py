@@ -367,7 +367,7 @@ atexit.register(cleanup_mongodb)
 
 # Configure Ollama API - UPDATED FOR LOCAL SERVICE
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "14bfe5365cc246dc82d933e3af2aa5b6.hz2asqgJi2bO_gpN7Cp1Hcku")  # Empty for local Ollama
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")  # Local Ollama service
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "https://ollama.com")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "codellama:13b")  # Use llama2 or any model you have installed
 USE_HOSTED_OLLAMA = False  # Use local Ollama
 
