@@ -366,7 +366,7 @@ atexit.register(cleanup_mongodb)
 # ================== MONGODB INTEGRATION END ==================
 
 # Configure Ollama API - UPDATED FOR LOCAL SERVICE
-OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "")  # Empty for local Ollama
+OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "14bfe5365cc246dc82d933e3af2aa5b6.hz2asqgJi2bO_gpN7Cp1Hcku")  # Empty for local Ollama
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")  # Local Ollama service
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama2")  # Use llama2 or any model you have installed
 USE_HOSTED_OLLAMA = False  # Use local Ollama
@@ -1029,7 +1029,7 @@ def get_intro_response() -> str:
 def get_fallback_response(prompt: str, image_data: Optional[str] = None) -> str:
     """Generate a fallback response when Ollama is not available"""
     prompt_lower = prompt.lower()
-    
+
     # Check for common queries and provide appropriate responses
     if "check" in prompt_lower and "subscription" in prompt_lower:
         return """Your current subscription status:
@@ -1045,7 +1045,7 @@ Features included:
 • API access
 
 Have I resolved your query?"""
-    
+
     elif "features" in prompt_lower or "what can you do" in prompt_lower:
         return """Novarsis SEO Tool features:
 
@@ -1059,7 +1059,7 @@ Have I resolved your query?"""
 ✓ Mobile optimization
 
 Would you like to know more about any specific feature?"""
-    
+
     elif "pricing" in prompt_lower or "plans" in prompt_lower or "cost" in prompt_lower:
         return """Our pricing plans:
 
@@ -1079,7 +1079,7 @@ Enterprise
 • Custom pricing
 
 Have I resolved your query?"""
-    
+
     elif "error" in prompt_lower or "issue" in prompt_lower or "problem" in prompt_lower:
         return """I understand you're experiencing an issue. Here are some common troubleshooting steps:
 
@@ -1092,7 +1092,7 @@ If the issue persists, please describe the specific error you're seeing.
 
 Contact Us:
 support@novarsistech.com"""
-    
+
     elif "analyze" in prompt_lower and "website" in prompt_lower:
         return """To analyze your website SEO:
 
@@ -1109,7 +1109,7 @@ The tool will scan your website and provide:
 • Technical SEO issues
 
 Have I resolved your query?"""
-    
+
     elif "report" in prompt_lower:
         return """To generate SEO reports:
 
@@ -1124,10 +1124,10 @@ You can also schedule automatic reports:
 • Email to team members
 
 Have I resolved your query?"""
-    
+
     elif "hello" in prompt_lower or "hi" in prompt_lower or "hey" in prompt_lower:
         return get_intro_response()
-    
+
     elif image_data:
         return """I can see you've uploaded an image. While I cannot analyze images without the AI service running, here's how to handle common SEO errors:
 
@@ -1144,7 +1144,7 @@ For technical errors:
 
 For specific help with your error, please contact:
 support@novarsistech.com"""
-    
+
     else:
         # Generic helpful response
         return f"""I understand you're asking about: {prompt[:100]}
@@ -1177,7 +1177,7 @@ def call_ollama_api(prompt: str, image_data: Optional[str] = None) -> str:
             except:
                 logger.warning("Cannot connect to Ollama, using fallback response")
                 return get_fallback_response(prompt, image_data)
-        
+
         # Check if using hosted service with API key
         if OLLAMA_API_KEY and USE_HOSTED_OLLAMA:
             headers = {
