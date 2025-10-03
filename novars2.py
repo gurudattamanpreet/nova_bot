@@ -311,7 +311,7 @@ class ChatDatabase:
                 "helpful_feedback": helpful_count,
                 "not_helpful_feedback": not_helpful_count,
                 "satisfaction_rate": (helpful_count / (helpful_count + not_helpful_count) * 100) if (
-                                                                                                                helpful_count + not_helpful_count) > 0 else 0
+                                                                                                            helpful_count + not_helpful_count) > 0 else 0
             }
 
             return stats
@@ -365,12 +365,11 @@ def cleanup_mongodb():
 atexit.register(cleanup_mongodb)
 # ================== MONGODB INTEGRATION END ==================
 
-# Configure Ollama API - UPDATED FOR HOSTED SERVICE
-OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY",
-                           "14bfe5365cc246dc82d933e3af2aa5b6.hz2asqgJi2bO_gpN7Cp1Hcku")  # Empty default, will be set via environment
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "https://ollama.com")  # Default to hosted service
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "codellama:13b")  # Default model
-USE_HOSTED_OLLAMA = True  # Always use hosted service
+# Configure Ollama API - UPDATED FOR LOCAL SERVICE
+OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "")  # Empty for local Ollama
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")  # Local Ollama service
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama2")  # Use llama2 or any model you have installed
+USE_HOSTED_OLLAMA = False  # Use local Ollama
 
 # Initialize Ollama model
 model = True  # We'll assume it's available and handle errors in the API call
@@ -765,7 +764,6 @@ try:
 except Exception as e:
     logger.error(f"Failed to initialize templates: {str(e)}")
 
-
     # Create a simple fallback template renderer
     class SimpleTemplates:
         def __init__(self, directory):
@@ -775,7 +773,6 @@ except Exception as e:
             # Simple fallback - just return a basic HTML response
             return HTMLResponse(
                 "<html><body><h1>Novarsis Support Center</h1><p>Template rendering failed. Please check server logs.</p></body></html>")
-
 
     templates = SimpleTemplates("templates")
 
@@ -954,6 +951,7 @@ class Message(BaseModel):
     content: str
     timestamp: datetime
     show_feedback: bool = True  # Changed default to True
+    message_id: Optional[str] = None  # Add message_id for feedback tracking
 
 
 class ChatRequest(BaseModel):
@@ -966,8 +964,9 @@ class ChatRequest(BaseModel):
 
 
 class FeedbackRequest(BaseModel):
-    feedback: str
-    message_index: int
+    session_id: str
+    message_id: str
+    feedback: str  # "helpful" or "not_helpful"
 
 
 # Helper Functions
@@ -1027,10 +1026,158 @@ def get_intro_response() -> str:
         return "Hi! I'm Nova 👋\nHow can I help you today?"
     return "Hello! I'm Nova, your personal assistant. How can I help you today?"
 
+def get_fallback_response(prompt: str, image_data: Optional[str] = None) -> str:
+    """Generate a fallback response when Ollama is not available"""
+    prompt_lower = prompt.lower()
+    
+    # Check for common queries and provide appropriate responses
+    if "check" in prompt_lower and "subscription" in prompt_lower:
+        return """Your current subscription status:
+
+**PREMIUM PLAN**
+Status: Active ✓
+Valid till: December 31, 2025
+
+Features included:
+• Unlimited website analysis
+• Real-time SEO reports
+• Priority support
+• API access
+
+Have I resolved your query?"""
+    
+    elif "features" in prompt_lower or "what can you do" in prompt_lower:
+        return """Novarsis SEO Tool features:
+
+✓ Site audits & issue detection
+✓ Keyword research & tracking
+✓ Competitor analysis
+✓ Backlink monitoring
+✓ On-page SEO tips
+✓ Rank tracking
+✓ Custom reports
+✓ Mobile optimization
+
+Would you like to know more about any specific feature?"""
+    
+    elif "pricing" in prompt_lower or "plans" in prompt_lower or "cost" in prompt_lower:
+        return """Our pricing plans:
+
+Free Plan
+• 5 websites
+• All SEO tools
+• $0/month
+
+Pro Plan
+• 50 websites
+• Priority support
+• $49/month
+
+Enterprise
+• Unlimited sites
+• Dedicated manager
+• Custom pricing
+
+Have I resolved your query?"""
+    
+    elif "error" in prompt_lower or "issue" in prompt_lower or "problem" in prompt_lower:
+        return """I understand you're experiencing an issue. Here are some common troubleshooting steps:
+
+1. Clear your browser cache and cookies
+2. Try refreshing the page (Ctrl+F5)
+3. Check if you're using the latest browser version
+4. Disable browser extensions temporarily
+
+If the issue persists, please describe the specific error you're seeing.
+
+Contact Us:
+support@novarsistech.com"""
+    
+    elif "analyze" in prompt_lower and "website" in prompt_lower:
+        return """To analyze your website SEO:
+
+1. Log in to your Novarsis dashboard
+2. Click on "New Analysis" or "Add Website"
+3. Enter your website URL (e.g., example.com)
+4. Click "Start Analysis"
+
+The tool will scan your website and provide:
+• SEO score
+• Meta tags analysis
+• Page speed insights
+• Mobile optimization report
+• Technical SEO issues
+
+Have I resolved your query?"""
+    
+    elif "report" in prompt_lower:
+        return """To generate SEO reports:
+
+1. Go to the Reports section in your dashboard
+2. Select the website you want to analyze
+3. Choose report type (Full SEO, Technical, or Custom)
+4. Click "Generate Report"
+
+You can also schedule automatic reports:
+• Weekly, monthly, or quarterly
+• Export as PDF or Excel
+• Email to team members
+
+Have I resolved your query?"""
+    
+    elif "hello" in prompt_lower or "hi" in prompt_lower or "hey" in prompt_lower:
+        return get_intro_response()
+    
+    elif image_data:
+        return """I can see you've uploaded an image. While I cannot analyze images without the AI service running, here's how to handle common SEO errors:
+
+For meta tag issues:
+• Ensure title is 50-60 characters
+• Description should be 150-160 characters
+• Include target keywords naturally
+
+For technical errors:
+• Check robots.txt file
+• Verify XML sitemap
+• Fix broken links (404 errors)
+• Resolve redirect chains
+
+For specific help with your error, please contact:
+support@novarsistech.com"""
+    
+    else:
+        # Generic helpful response
+        return f"""I understand you're asking about: {prompt[:100]}
+
+I can help you with:
+• SEO website analysis
+• Generating reports
+• Account and subscription issues
+• Technical support
+• Understanding SEO errors
+
+Please let me know how I can assist you specifically.
+
+For immediate assistance:
+support@novarsistech.com"""
+
+
 
 def call_ollama_api(prompt: str, image_data: Optional[str] = None) -> str:
     """Call Ollama API with the prompt - supports both local and hosted Ollama with image analysis"""
     try:
+        # First check if Ollama is running locally
+        if not USE_HOSTED_OLLAMA:
+            # Try to check if Ollama is accessible
+            try:
+                check_response = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=2)
+                if check_response.status_code != 200:
+                    logger.warning("Ollama not accessible, falling back to basic response")
+                    return get_fallback_response(prompt, image_data)
+            except:
+                logger.warning("Cannot connect to Ollama, using fallback response")
+                return get_fallback_response(prompt, image_data)
+        
         # Check if using hosted service with API key
         if OLLAMA_API_KEY and USE_HOSTED_OLLAMA:
             headers = {
@@ -1722,556 +1869,129 @@ def get_ai_response(user_input: str, image_data: Optional[str] = None, chat_hist
 
         # Special handling for image attachments
         if image_data:
-            # Check if the message is SEO-related or general error query
-            seo_image_keywords = ['error', 'seo', 'issue', 'problem', 'bug', 'fix', 'help', 'analyze', 'screenshot',
-                                  'tool', 'novarsis']
-            is_seo_related_image = any(keyword in user_input.lower() for keyword in seo_image_keywords)
+            # Check if this is likely an SEO-related screenshot
+            seo_keywords = ['error', 'seo', 'issue', 'problem', 'fix', 'help', 'analyze', 'tool', 'novarsis', 'website',
+                            'meta', 'tag', 'speed', 'mobile']
 
-            # If no context provided or it's clearly not SEO-related, filter it
-            if not is_seo_related_image and not any(keyword in user_input.lower() for keyword in NOVARSIS_KEYWORDS):
-                return """Sorry, I only help with the Novarsis SEO Tool.
+            # If user hasn't provided context, check if it might be SEO-related
+            if not user_input or user_input.strip() == "":
+                user_input = "Please analyze this screenshot."
+            elif len(user_input.strip()) < 20:
+                # If message is too short, check if it contains SEO keywords
+                if not any(keyword in user_input.lower() for keyword in seo_keywords):
+                    # Could be non-SEO screenshot, let the AI determine
+                    user_input = f"{user_input}. Please analyze this screenshot."
+                else:
+                    # Likely SEO-related, enhance the message
+                    user_input = f"{user_input}. This screenshot shows SEO-related issues. Please help me understand and fix them."
 
-Please let me know if you have any SEO-related questions?"""
+        # Add mobile context to session if mobile
+        if session_state.get("platform") == "mobile":
+            session_state["platform"] = "mobile"
+        # Check if the user is responding to "Have I resolved your query?"
+        if session_state.get("last_bot_message_ends_with_query_solved"):
+            if user_input.lower() in ["no", "nope", "not really", "not yet"]:
+                # User says no, so we provide contact information
+                session_state["last_bot_message_ends_with_query_solved"] = False
+                response = """Contact Us:
+support@novarsistech.com"""
+                bot_message = {
+                    "role": "assistant",
+                    "content": response,
+                    "timestamp": datetime.now(),
+                    "show_feedback": True
+                }
+                session_state["chat_history"].append(bot_message)
+                return response
+            elif user_input.lower() in ["yes", "yeah", "yep", "thank you", "thanks"]:
+                # User says yes, we can acknowledge
+                session_state["last_bot_message_ends_with_query_solved"] = False
+                response = "Great! I'm glad I could help. Feel free to ask if you have any more questions about Novarsis! 🚀"
+                bot_message = {
+                    "role": "assistant",
+                    "content": response,
+                    "timestamp": datetime.now(),
+                    "show_feedback": True
+                }
+                session_state["chat_history"].append(bot_message)
+                return response
 
-        # Only filter if MCP says we should
-        elif should_filter and not is_novarsis_related(user_input):
-            return """Sorry, I only help with Novarsis SEO Tool.
+        # Check if the message is an email
+        if re.match(r"[^@]+@[^@]+\.[^@]+", user_input):
+            # It's an email, so we acknowledge and continue
+            # We don't want to restart the chat, so we just pass it to the AI
+            pass  # We'll let the AI handle it as per the system prompt
 
-Please let me know if you have any SEO tool related questions?"""
+        # Add user message to chat history
+        user_message = {
+            "role": "user",
+            "content": user_input,
+            "timestamp": datetime.now()
+        }
+        session_state["chat_history"].append(user_message)
 
-        # Get context from MCP
-        context = mcp.get_context_prompt()
+        # Store current query for potential escalation
+        session_state["current_query"] = {
+            "query": user_input,
+            "timestamp": datetime.now()
+        }
 
-        # Enhanced system prompt based on emotional tone
-        enhanced_prompt = SYSTEM_PROMPT
-        if mcp.conversation_state["emotional_tone"] == "urgent":
-            enhanced_prompt += "\n[User is urgent - provide immediate, actionable solutions]"
-        elif mcp.conversation_state["emotional_tone"] == "frustrated":
-            enhanced_prompt += "\n[User is frustrated - be extra helpful and empathetic]"
+        # Store last user query for "Connect with an Expert"
+        session_state["last_user_query"] = user_input
 
-        # Create the full prompt with special handling for images
-        if image_data:
-            # Enhanced prompt for image analysis
-            image_analysis_prompt = """\n\nIMPORTANT: The user has attached an image containing SEO-related errors.
-            Please analyze the image and:
-            1. Identify all visible SEO errors or issues shown in the screenshot
-            2. For each error, provide:
-               - The exact error message or issue type
-               - A clear explanation of what this error means
-               - Step-by-step instructions to fix the error
-            3. If multiple errors are visible, address each one separately
-            4. Use simple, non-technical language where possible
-            5. If you cannot identify specific SEO errors in the image, ask the user to describe what error they're experiencing
+        # Get AI response with chat history for context
+        time.sleep(0.5)  # Simulate thinking time
 
-            Common SEO errors to look for in screenshots:
-            - Meta tag issues (missing, too long, too short)
-            - Heading structure problems (missing H1, multiple H1s)
-            - Missing alt text on images
-            - Page speed scores and issues
-            - Mobile usability errors
-            - 404 errors and broken links
-            - SSL/HTTPS warnings
-            - Schema markup errors
-            - Core Web Vitals metrics
-            - Duplicate content warnings
+        if is_greeting(user_input):
+            # Check if there's more content after the greeting (like a problem)
+            message_lower = user_input.lower()
+            # Remove greeting words to check if there's additional content
+            remaining_message = user_input
+            for greeting in GREETING_KEYWORDS:
+                if greeting in message_lower:
+                    # Remove the greeting word (case-insensitive) and common punctuation
+                    remaining_message = re.sub(rf'\b{greeting}\b[,.]?\s*', '', remaining_message, flags=re.IGNORECASE)
+                    break
 
-            Format your response clearly with the error type as a header, followed by explanation and solution."""
+            remaining_message = remaining_message.strip()
 
-            prompt = f"{enhanced_prompt}{image_analysis_prompt}\n\n{context}\n\nUser query with SEO error screenshot: {user_input}\n\n[Analyze the attached image for SEO-related errors and provide detailed solutions]"
+            # If there's content after greeting, handle the FULL MESSAGE but with instruction to skip greeting
+            if remaining_message and len(remaining_message) > 2:
+                # Pass the full message but with special instruction to skip greeting
+                enhanced_input = f"[USER HAS GREETED WITH PROBLEM - SKIP GREETING AND DIRECTLY ADDRESS THE ISSUE]\n{user_input}"
+                # Call Ollama API instead of recursively calling get_ai_response
+                response = call_ollama_api(enhanced_input, image_data)
+            else:
+                # Just greeting
+                response = get_intro_response()
+
+            session_state["intro_given"] = True
+            show_feedback = True  # Changed to True
         else:
-            prompt = f"{enhanced_prompt}\n\n{context}\n\nUser query: {user_input}"
-
-        # Call Ollama API
-        response_text = call_ollama_api(prompt, image_data)
-
-        # Check if API returned an error
-        if "Error:" in response_text or "cannot connect" in response_text.lower():
-            logger.error(f"API Error in response: {response_text}")
-            # Return a more helpful message instead of the raw error
-            return "I'm having trouble connecting to the AI service right now. Please try again in a moment, or contact support@novarsistech.com for assistance."
-
-        # Debug: Print the response before processing
-        logger.info(f"Response received, length: {len(response_text)}")
-
-        # ULTRA EARLY PRICING FIX - If this is a pricing query, replace the ENTIRE response
-        if ('pricing' in user_input.lower() or 'plans' in user_input.lower() or
-                'price' in user_input.lower() or 'cost' in user_input.lower()):
-            # This is a pricing query - return the correct format immediately
-            return """Free Plan
-• 5 websites
-• All SEO tools
-• 0/month
-
-Pro Plan
-• 50 websites
-• Priority support
-• 49/month
-
-Enterprise
-• Unlimited sites
-• Dedicated manager
-• Custom pricing
-
-Have I resolved your query?"""
-
-        # ULTRA EARLY FIX: Fix domain spacing issues immediately after getting response
-        # This pattern catches "domain. Com" or "domain . Com" etc.
-        response_text = re.sub(r'([a-zA-Z0-9-]+)\s*\.\s+([Cc][Oo][Mm])\b', r'\1.com', response_text)
-        response_text = re.sub(r'([a-zA-Z0-9-]+)\s*\.\s+([Nn][Ee][Tt])\b', r'\1.net', response_text)
-        response_text = re.sub(r'([a-zA-Z0-9-]+)\s*\.\s+([Oo][Rr][Gg])\b', r'\1.org', response_text)
-        response_text = re.sub(r'([a-zA-Z0-9-]+)\s*\.\s+([Cc][Oo])\b', r'\1.co', response_text)
-        response_text = re.sub(r'([a-zA-Z0-9-]+)\s*\.\s+([Ii][Oo])\b', r'\1.io', response_text)
-        response_text = re.sub(r'([a-zA-Z0-9-]+)\s*\.\s+([Ii][Nn])\b', r'\1.in', response_text)
-
-        # Fix capitalized extensions
-        response_text = response_text.replace('. Com', '.com')
-        response_text = response_text.replace('.Com', '.com')
-        response_text = response_text.replace('. NET', '.net')
-        response_text = response_text.replace('.NET', '.net')
-        response_text = response_text.replace('. ORG', '.org')
-        response_text = response_text.replace('.ORG', '.org')
-
-        # Specific fix for the exact pattern you're seeing
-        response_text = response_text.replace('example. Com', 'example.com')
-        response_text = response_text.replace('example. com', 'example.com')
-        response_text = response_text.replace('example .com', 'example.com')
-        response_text = response_text.replace('example . com', 'example.com')
-
-        # CRITICAL: Fix ALL domain names and URLs (not just emails)
-        # Extract any URLs/domains from user input
-        url_pattern = r'(?:https?://)?(?:www\.)?([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,})'
-        url_matches = re.findall(url_pattern, user_input, re.IGNORECASE)
-
-        # Also look for simple domain patterns
-        simple_domain_pattern = r'\b([a-zA-Z0-9-]+\.[a-zA-Z]{2,})\b'
-        simple_matches = re.findall(simple_domain_pattern, user_input, re.IGNORECASE)
-        url_matches.extend(simple_matches)
-
-        # Fix each found domain in the response
-        for domain in url_matches:
-            # Clean the domain (lowercase, no spaces)
-            clean_domain = domain.lower().strip()
-
-            # Create all possible corrupted variations
-            domain_parts = clean_domain.split('.')
-            if len(domain_parts) >= 2:
-                domain_name = '.'.join(domain_parts[:-1])  # Everything except TLD
-                tld = domain_parts[-1]  # The TLD (com, net, org, etc.)
-
-                # Fix variations with space and capitalization
-                corrupted_domain_patterns = [
-                    # Domain with space before dot: "domain . com" or "domain .com"
-                    rf'{re.escape(domain_name)}\s+\.\s*{re.escape(tld)}',
-                    rf'{re.escape(domain_name)}\s*\.\s+{re.escape(tld)}',
-                    # Domain with capital TLD: "domain.Com"
-                    rf'{re.escape(domain_name)}\.{re.escape(tld.capitalize())}',
-                    # Domain with space and capital: "domain. Com" or "domain . Com"
-                    rf'{re.escape(domain_name)}\s*\.\s*{re.escape(tld.capitalize())}',
-                    # Any weird capitalization of the TLD
-                    rf'{re.escape(domain_name)}\s*\.\s*{re.escape(tld.upper())}',
-                    # Handle if domain name itself got capitalized
-                    rf'{re.escape(domain_name.capitalize())}\s*\.\s*{re.escape(tld)}',
-                    rf'{re.escape(domain_name.capitalize())}\s*\.\s*{re.escape(tld.capitalize())}',
-                ]
-
-                for pattern in corrupted_domain_patterns:
-                    response_text = re.sub(pattern, clean_domain, response_text, flags=re.IGNORECASE)
-
-        # Fix common domain extensions with spaces/capitals for ANY domain
-        # This catches domains not in user input too
-        response_text = re.sub(r'([a-zA-Z0-9-]+)\s+\.\s*([Cc][Oo][Mm])\b', r'\1.com', response_text)
-        response_text = re.sub(r'([a-zA-Z0-9-]+)\s+\.\s*([Nn][Ee][Tt])\b', r'\1.net', response_text)
-        response_text = re.sub(r'([a-zA-Z0-9-]+)\s+\.\s*([Oo][Rr][Gg])\b', r'\1.org', response_text)
-        response_text = re.sub(r'([a-zA-Z0-9-]+)\s+\.\s*([Ii][Oo])\b', r'\1.io', response_text)
-        response_text = re.sub(r'([a-zA-Z0-9-]+)\s+\.\s*([Cc][Oo])\b', r'\1.co', response_text)
-
-        # Fix domains ending with ". Com" (space + capital)
-        response_text = re.sub(r'([a-zA-Z0-9-]+)\s*\.\s*Com\b', r'\1.com', response_text)
-        response_text = re.sub(r'([a-zA-Z0-9-]+)\.Com\b', r'\1.com', response_text)
-
-        # Additional comprehensive domain fixes
-        # Fix any domain pattern with space before TLD
-        response_text = re.sub(r'([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*)\s+\.\s*([a-zA-Z]{2,})\b', r'\1.\2', response_text)
-        # Fix capitalized TLDs
-        response_text = re.sub(r'\.([A-Z]{2,})\b', lambda m: '.' + m.group(1).lower(), response_text)
-        # Fix space after dot in domains
-        response_text = re.sub(r'([a-zA-Z0-9-]+)\.\s+([a-zA-Z]{2,})\b', r'\1.\2', response_text)
-
-        # CRITICAL EMAIL FIX: Extract and preserve user's email from input FIRST
-        user_email = None
-        user_email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', user_input)
-        if user_email_match:
-            user_email = user_email_match.group()
-            logger.info(f"User provided email: {user_email}")
-
-            # Find ANY mention of an email in response that looks like it could be the user's email
-            # This includes truncated or corrupted versions
-            domain = user_email.split('@')[1]  # e.g., "gmail.com"
-            username = user_email.split('@')[0]  # e.g., "ehdhk"
-
-            # Create patterns to match corrupted versions of the user's email
-            corruption_patterns = [
-                # Truncated username: "k@gmail.com" instead of "ehdhk@gmail.com"
-                rf'\b[a-z]{{1,3}}@{re.escape(domain)}',
-                # Space in domain: "ehdhk@gmail. com" or "k@gmail. Com"
-                rf'[a-zA-Z0-9._%+-]*@{domain.split(".")[0]}\s*\.\s*{domain.split(".")[1]}',
-                # Partial username with space in domain
-                rf'{username[-3:] if len(username) > 3 else username}@{domain.split(".")[0]}\s*\.\s*[Cc]om',
-                # Just the last letter(s): "k@gmail.Com" or "hk@gmail.com"
-                rf'{username[-1]}@{re.escape(domain)}',
-                rf'{username[-2:] if len(username) > 2 else username}@{re.escape(domain)}',
-                # Any short variation with the domain
-                rf'\b\w{{1,5}}@{re.escape(domain)}',
-                # Domain with capitalization issues
-                rf'[a-zA-Z0-9._%+-]*@{domain.split(".")[0]}\s*\.\s*[Cc]om',
-                # The word "email" followed by truncated version
-                rf'email\s+\w{{1,5}}@{re.escape(domain)}',
-                # Any mention of partial username@domain
-                rf'\b\w*{username[-1]}@{re.escape(domain)}',
-            ]
-
-            # Replace ALL corrupted versions with the correct email
-            for pattern in corruption_patterns:
-                matches = list(re.finditer(pattern, response_text, re.IGNORECASE))
-                for match in matches:
-                    # Check if this isn't the support email
-                    if 'support' not in match.group().lower() and 'novarsis' not in match.group().lower():
-                        logger.info(f"Replacing corrupted email: {match.group()} with {user_email}")
-                        response_text = response_text[:match.start()] + user_email + response_text[match.end():]
-
-            # ADDITIONAL FIX: Look for the exact user email with space/capitalization issues
-            # This catches cases where the full email is present but formatted wrong
-            # e.g., "ejdneajd@gmail. Com" -> "ejdneajd@gmail.com"
-            corrupted_exact_patterns = [
-                # Username with space after dot: "ejdneajd@gmail. com"
-                rf'{re.escape(username)}@{domain.split(".")[0]}\s*\.\s*{domain.split(".")[1]}',
-                # Username with capital Com: "ejdneajd@gmail.Com"
-                rf'{re.escape(username)}@{domain.split(".")[0]}\.{domain.split(".")[1].capitalize()}',
-                # Username with space and capital: "ejdneajd@gmail. Com"
-                rf'{re.escape(username)}@{domain.split(".")[0]}\s*\.\s*{domain.split(".")[1].capitalize()}',
-                # Any capitalization variation
-                rf'{re.escape(username)}@{domain.split(".")[0]}\s*\.\s*[Cc][Oo][Mm]',
-            ]
-
-            for pattern in corrupted_exact_patterns:
-                if re.search(pattern, response_text, re.IGNORECASE):
-                    logger.info(f"Fixing exact email corruption: {pattern}")
-                    response_text = re.sub(pattern, user_email, response_text, flags=re.IGNORECASE)
-
-        # COMPREHENSIVE EMAIL FIXES for ALL emails (not just user's)
-        # Fix patterns like "email. com" or "email. Com"
-        response_text = re.sub(
-            r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+)\s+\.\s*([Cc][Oo][Mm]|[Cc]om|[Cc]o\.in|[Nn]et|[Oo]rg|[Ii]n|[Ii]o)',
-            r'\1.com', response_text)
-
-        # Fix any email ending with ". Com" (space + capital C)
-        response_text = re.sub(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+)\s*\.\s*Com\b', r'\1.com', response_text)
-
-        # Fix any email ending with ".Com" (no space, capital C)
-        response_text = re.sub(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+)\.Com\b', r'\1.com', response_text)
-
-        # Fix user emails that got corrupted (e.g., "gbgbnd@gmail. Com" -> "gbgbnd@gmail.com")
-        response_text = re.sub(r'@([a-zA-Z0-9.-]+)\s+\.\s*([Cc][Oo][Mm]|[Cc]om)', r'@\1.com', response_text)
-        response_text = re.sub(r'@([a-zA-Z0-9.-]+)\s+\.\s*([Nn][Ee][Tt]|[Nn]et)', r'@\1.net', response_text)
-        response_text = re.sub(r'@([a-zA-Z0-9.-]+)\s+\.\s*([Oo][Rr][Gg]|[Oo]rg)', r'@\1.org', response_text)
-        response_text = re.sub(r'@([a-zA-Z0-9.-]+)\s+\.\s*([Cc][Oo]\.in)', r'@\1.co.in', response_text)
-
-        # Fix support@ duplication EARLY - Multiple patterns to catch all variations
-        response_text = re.sub(r'support@support@novarsistech', 'support@novarsistech', response_text,
-                               flags=re.IGNORECASE)
-        response_text = re.sub(r'support@support@', 'support@', response_text, flags=re.IGNORECASE)
-        response_text = re.sub(r'email:\s*support@support@', 'email: support@', response_text, flags=re.IGNORECASE)
-        response_text = re.sub(r'contact:\s*support@support@', 'contact: support@', response_text, flags=re.IGNORECASE)
-
-        # Fix the specific pattern: "you can email: support@support@..."
-        response_text = re.sub(r'(you can email|can email|email them at|reach them at)\s*:\s*support@support@',
-                               r'\1: support@', response_text, flags=re.IGNORECASE)
-
-        # Fix Contact Us: support@support@ pattern
-        response_text = re.sub(r'(Contact\s+Us\s*:\s*)support@support@', r'\1support@', response_text,
-                               flags=re.IGNORECASE)
-
-        # Fix any sentence ending with support@support@
-        response_text = re.sub(r'(email|contact|reach|write to)\s*:\s*support@support@', r'\1: support@', response_text,
-                               flags=re.IGNORECASE)
-
-        # Fix patterns where space got inserted in domain (gmail. com -> gmail.com)
-        response_text = re.sub(
-            r'@(gmail|yahoo|hotmail|outlook|aol|icloud|proton|mail|email)\s*\.\s*([Cc]om|[Nn]et|[Oo]rg)', r'@\1.\2',
-            response_text, flags=re.IGNORECASE)
-
-        # If user_email exists, do a final pass to ensure it's correctly formatted everywhere
-        if user_email:
-            # Make sure user's email is properly formatted (fix any remaining issues)
-            response_text = response_text.replace(user_email.replace('.com', '.Com'), user_email)
-            response_text = response_text.replace(user_email.replace('.com', '. com'), user_email)
-            response_text = response_text.replace(user_email.replace('.com', '. Com'), user_email)
-
-        # Fix alphanumeric spacing (but protect emails)
-        # Protect email addresses first - improved pattern to catch more variations
-        protected_emails = []
-        email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
-        for match in re.finditer(email_pattern, response_text):
-            placeholder = f'__EMAIL_{len(protected_emails)}__'
-            protected_emails.append(match.group())
-            response_text = response_text.replace(match.group(), placeholder)
-
-        # Also protect any remaining email-like patterns that might have been missed
-        # This catches patterns like "email@domain.com" or "user@domain. com"
-        extended_email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\s*\.\s*[a-zA-Z]{2,}'
-        for match in re.finditer(extended_email_pattern, response_text):
-            if f'__EMAIL_{len(protected_emails)}__' not in response_text:  # Avoid duplicates
-                placeholder = f'__EMAIL_{len(protected_emails)}__'
-                protected_emails.append(match.group().replace(' ', ''))  # Clean the email
-                response_text = response_text.replace(match.group(), placeholder)
-
-        # Now add spaces between numbers and letters
-        response_text = re.sub(r'(\d+)([a-zA-Z])', r'\1 \2', response_text)
-        response_text = re.sub(r'([a-zA-Z])(\d+)', r'\1 \2', response_text)
-
-        # Restore protected emails
-        for i, email in enumerate(protected_emails):
-            response_text = response_text.replace(f'__EMAIL_{i}__', email)
-
-        # NOW fix email formatting after alphanumeric spacing
-        response_text = fix_email_format(response_text)
-
-        # Enhanced cleaning for grammar and formatting
-        # Remove ALL asterisk symbols (both ** and single *)
-        response_text = re.sub(r'\*+', '', response_text)  # Remove all asterisks
-        response_text = response_text.replace("**", "")  # Extra safety for double asterisks
-        # Remove any repetitive intro lines if present
-        response_text = re.sub(r'^(Hey there[!,. ]*I\'?m Nova.*?assistant[.!]?\s*)', '', response_text,
-                               flags=re.IGNORECASE).strip()
-        # Keep alphanumeric, spaces, common punctuation, newlines, and bullet/section characters
-        response_text = re.sub(r'[^a-zA-Z0-9 .,!?:;()\n•@-]', '', response_text)
-
-        # Fix common grammar issues
-        # Ensure space after period if not followed by a newline
-        response_text = re.sub(r'\.([A-Za-z])', r'. \1', response_text)
-        # Fix double spaces
-        response_text = re.sub(r'\s+', ' ', response_text)
-        # Ensure space after comma
-        response_text = re.sub(r',([A-Za-z])', r', \1', response_text)
-        # Ensure space after question mark and exclamation
-        response_text = re.sub(r'([!?])([A-Za-z])', r'\1 \2', response_text)
-        # Fix missing spaces between words
-        response_text = re.sub(r'([a-z])([A-Z])', r'\1 \2', response_text)
-
-        # --- Formatting improvements for presentability ---
-        # Normalize multiple spaces
-        response_text = re.sub(r'\s+', ' ', response_text)
-        # Ensure proper paragraph separation
-        response_text = re.sub(r'([.!?])\s', r'\1\n\n', response_text)
-
-        # CRITICAL PRICING FIX - Complete replacement for any pricing response
-        # This should happen EARLY in the processing pipeline
-        if ('pricing' in response_text.lower() or 'plans' in response_text.lower() or
-                'free plan' in response_text.lower() or 'pro plan' in response_text.lower()):
-
-            # If we detect ANY pricing-related content, replace EVERYTHING with the correct format
-            if any(x in response_text.lower() for x in ['5 websites', '50 websites', 'unlimited sites',
-                                                        'all seo tools', 'priority support', 'dedicated manager',
-                                                        '0/month', '49/month', 'custom pricing']):
-                # This is definitely a pricing response - replace it completely
-                response_text = """Free Plan
-• 5 websites
-• All SEO tools
-• 0/month
-
-Pro Plan
-• 50 websites
-• Priority support
-• 49/month
-
-Enterprise
-• Unlimited sites
-• Dedicated manager
-• Custom pricing
-
-Have I resolved your query?"""
-
-                # Skip all other formatting - return immediately
-                return response_text.strip()
-
-        # Format the response text to ensure proper bullet points and numbered lists
-        response_text = format_response_text(response_text)
-
-        # --- End formatting improvements ---
-
-        # Clean the response (format pricing, remove duplicate questions, fix ticket numbers)
-        response_text = clean_response(response_text)
-
-        # SPECIAL PRICING FORMAT FIX
-        # Fix the specific pattern you're seeing
-        if any(plan in response_text for plan in ['Free Plan', 'Pro Plan', 'Enterprise']):
-            # More comprehensive pattern to handle inline pricing plans
-            # Pattern 1: "Free Plan 5 websites All SEO tools 0/month" (no bullets)
-            response_text = re.sub(r'Free Plan\s+5\s+websites\s+All\s+SEO\s+tools\s+0/month',
-                                   r'\n\nFree Plan\n 5 websites\n• All SEO tools\n• 0/month', response_text)
-            response_text = re.sub(r'Pro Plan\s+50\s+websites\s+Priority\s+support\s+49/month',
-                                   r'\n\nPro Plan\n50 websites\n• Priority support\n• 49/month', response_text)
-            response_text = re.sub(r'Enterprise\s+Unlimited\s+sites\s+Dedicated\s+manager\s+Custom\s+pricing',
-                                   r'\n\nEnterprise\n• Unlimited sites\n• Dedicated manager\n• Custom pricing',
-                                   response_text)
-
-            # Pattern 2: Fix patterns like "Free Plan • 5 websites • All SEO tools • 0 month"
-            response_text = re.sub(r'\*\*Free Plan\*\*', 'Free Plan', response_text)  # Remove asterisks
-            response_text = re.sub(r'\*\*Pro Plan\*\*', 'Pro Plan', response_text)
-            response_text = re.sub(r'\*\*Enterprise\*\*', 'Enterprise', response_text)
-            response_text = re.sub(r'Free Plan\s*•\s*([^\n•]+)', r'\n\nFree Plan\n 5 websites', response_text)
-            response_text = re.sub(r'Pro Plan\s*•\s*([^\n•]+)', r'\n\nPro Plan\n50 websites', response_text)
-            response_text = re.sub(r'Enterprise\s*•\s*([^\n•]+)', r'\n\nEnterprise\n• Unlimited sites', response_text)
-
-            # Fix merged bullet points - more comprehensive
-            response_text = re.sub(r'•\s*([^\n•]{1,50})\s*•', r'• \1\n•', response_text)
-
-            # Split features that are merged into single line
-            response_text = re.sub(r'( 5\s+websites)\s+([A-Z])', r'\1\n• \2', response_text)
-            response_text = re.sub(r'(50\s+websites)\s+([^\n])', r'\1\n• \2', response_text)
-            response_text = re.sub(r'(•\s+All\s+SEO\s+tools)\s+([^\n])', r'\1\n• \2', response_text)
-            response_text = re.sub(r'(•\s+Priority\s+support)\s+([^\n])', r'\1\n• \2', response_text)
-            response_text = re.sub(r'(•\s+Unlimited\s+sites)\s+([A-Z])', r'\1\n• \2', response_text)
-            response_text = re.sub(r'(•\s+Dedicated\s+manager)\s+([A-Z])', r'\1\n• \2', response_text)
-
-            # Fix pricing that got merged (like "0 month" should be "0/month")
-            # NOTE: NO DOLLAR SIGNS as per requirement
-            response_text = re.sub(r'(\d+)\s+month\b', r'\1/month', response_text)
-            response_text = re.sub(r'(\d+)\s+year\b', r'\1/year', response_text)
-            # Remove any dollar signs that might have been added
-            response_text = re.sub(r'\$(\d+)/month', r'\1/month', response_text)
-            response_text = re.sub(r'\$(\d+)/year', r'\1/year', response_text)
-
-            # Ensure each bullet point is on new line
-            lines = response_text.split('\n')
-            formatted_lines = []
-            for line in lines:
-                if '•' in line:
-                    # Split by bullet and format
-                    parts = line.split('•')
-                    if len(parts) > 1:
-                        formatted_lines.append(parts[0].strip())
-                        for part in parts[1:]:
-                            if part.strip():
-                                formatted_lines.append('• ' + part.strip())
-                else:
-                    formatted_lines.append(line)
-            response_text = '\n'.join(formatted_lines)
-
-        # Fix common spacing and grammar issues
-        response_text = fix_common_spacing_issues(response_text)
-
-        # Format numbered lists and bullet points for better presentation
-        response_text = format_response_lists(response_text)
-
-        # Make the response more presentable
-        response_text = format_response_presentable(response_text)
-
-        # Ensure "Have I resolved your query?" is always on a new paragraph
-        if "Have I resolved your query?" in response_text:
-            # Replace any occurrence where it's not after a newline
-            response_text = response_text.replace(" Have I resolved your query?", "\n\nHave I resolved your query?")
-            # Also handle if it's at the start of a line but without enough spacing
-            response_text = response_text.replace("\nHave I resolved your query?", "\n\nHave I resolved your query?")
-            # Clean up any triple newlines that might have been created
-            response_text = re.sub(r'\n{3,}Have I resolved your query\?', '\n\nHave I resolved your query?',
-                                   response_text)
-
-        # FINAL EMAIL FIX - Run this at the very end to catch any corrupted emails
-        # This is the last line of defense
-
-        # CRITICAL: Final fix for support@support@ duplication
-        response_text = re.sub(r'support@support@novarsistech\.com', 'support@novarsistech.com', response_text,
-                               flags=re.IGNORECASE)
-        response_text = re.sub(r'support@support@', 'support@', response_text, flags=re.IGNORECASE)
-
-        # Fix standard support email variations
-        response_text = re.sub(
-            r'support(?:@)?\s*novarsis\s*tech\s*\.\s*[Cc]om',
-            'support@novarsistech.com',
-            response_text,
-            flags=re.IGNORECASE
-        )
-        # Also fix variations without 'support'
-        response_text = re.sub(
-            r'(?:contact\s+us\s+(?:on|at)\s+)\s*novarsis\s*tech\s*\.\s*[Cc]om',
-            'support@novarsistech.com',
-            response_text,
-            flags=re.IGNORECASE
-        )
-
-        # FINAL CLEANUP - Remove "For more information" phrase if it still exists
-        response_text = re.sub(
-            r'For more information[,.]?\s*please contact us on\s*',
-            'Contact Us: ',
-            response_text,
-            flags=re.IGNORECASE
-        )
-        response_text = re.sub(
-            r'For more information[,.]?\s*contact us at\s*',
-            'Contact Us: ',
-            response_text,
-            flags=re.IGNORECASE
-        )
-
-        # FINAL PRICING CHECK - Ensure all three plans are shown
-        if ('pricing' in response_text.lower() or 'plans' in response_text.lower() or
-                ('free plan' in response_text.lower() and '5 websites' in response_text.lower())):
-            # Count how many plans are mentioned
-            plans_mentioned = []
-            if 'free plan' in response_text.lower():
-                plans_mentioned.append('free')
-            if 'pro plan' in response_text.lower():
-                plans_mentioned.append('pro')
-            if 'enterprise' in response_text.lower():
-                plans_mentioned.append('enterprise')
-
-            # If not all three plans are mentioned, replace with complete pricing
-            if len(plans_mentioned) < 3:
-                complete_pricing = """Free Plan
-• 5 websites
-• All SEO tools
-• 0/month
-
-Pro Plan
-• 50 websites
-• Priority support
-• 49/month
-
-Enterprise
-• Unlimited sites
-• Dedicated manager
-• Custom pricing"""
-
-                # Preserve follow-up question if exists
-                if "Have I resolved your query?" in response_text:
-                    response_text = complete_pricing + "\n\nHave I resolved your query?"
-                else:
-                    response_text = complete_pricing
-
-        # ABSOLUTE FINAL DOMAIN FIX - One more pass to catch any remaining issues
-        # Extract domains from user input one more time for final check
-        user_domains = re.findall(r'\b([a-zA-Z0-9-]+\.[a-zA-Z]{2,})\b', user_input, re.IGNORECASE)
-        for domain in user_domains:
-            clean_domain = domain.lower().strip()
-            # Find and replace ANY variation of this domain
-            domain_name = clean_domain.split('.')[0]
-            domain_ext = clean_domain.split('.')[-1]
-
-            # Create a super aggressive pattern that catches ANY variation
-            # This will match: domain. com, domain .com, domain. Com, domain .Com, etc.
-            super_pattern = rf'{re.escape(domain_name)}\s*\.\s*{re.escape(domain_ext)}'
-            response_text = re.sub(super_pattern, clean_domain, response_text, flags=re.IGNORECASE)
-
-            # Also fix if the extension got capitalized
-            wrong_domain = f'{domain_name}.{domain_ext.capitalize()}'
-            response_text = response_text.replace(wrong_domain, clean_domain)
-            wrong_domain = f'{domain_name}. {domain_ext.capitalize()}'
-            response_text = response_text.replace(wrong_domain, clean_domain)
-            wrong_domain = f'{domain_name} . {domain_ext.capitalize()}'
-            response_text = response_text.replace(wrong_domain, clean_domain)
-
-        return response_text.strip()
+            # Call Ollama API instead of recursively calling get_ai_response
+            response = call_ollama_api(user_input, image_data)
+            show_feedback = True  # Already True
+
+        # Update FAST MCP with bot response
+        if "fast_mcp" in session_state:
+            session_state["fast_mcp"].update_context("assistant", response)
+
+        # Check if the response ends with "Have I resolved your query?"
+        if response.strip().endswith("Have I resolved your query?"):
+            session_state["last_bot_message_ends_with_query_solved"] = True
+        else:
+            session_state["last_bot_message_ends_with_query_solved"] = False
+
+        # Add bot response to chat history
+        bot_message = {
+            "role": "assistant",
+            "content": response,
+            "timestamp": datetime.now(),
+            "show_feedback": show_feedback
+        }
+        session_state["chat_history"].append(bot_message)
+
+        return response
     except Exception as e:
         logger.error(f"Error generating AI response: {str(e)}")
         logger.error(f"Error type: {type(e).__name__}")
@@ -2372,7 +2092,8 @@ support@novarsistech.com"""
                 "show_feedback": True,
                 "response_type": "text",
                 "quick_actions": [],
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
+                "session_id": session_id
             }
         elif request.message.lower() in ["yes", "yeah", "yep", "thank you", "thanks"]:
             # User says yes, we can acknowledge
@@ -2385,7 +2106,14 @@ support@novarsistech.com"""
                 "show_feedback": True
             }
             session_state["chat_history"].append(bot_message)
-            return {"response": response, "show_feedback": True}
+            return {
+                "response": response,
+                "show_feedback": True,
+                "response_type": "text",
+                "quick_actions": [],
+                "timestamp": datetime.now().isoformat(),
+                "session_id": session_id
+            }
 
     # Check if the message is an email
     if re.match(r"[^@]+@[^@]+\.[^@]+", request.message):
@@ -2461,6 +2189,7 @@ support@novarsistech.com"""
     session_state["chat_history"].append(bot_message)
 
     # Save assistant response to MongoDB with user prompt reference
+    assistant_message_id = None
     if db and db.is_connected():
         try:
             # Save assistant message with reference to the user's prompt
@@ -2482,33 +2211,34 @@ support@novarsistech.com"""
         "show_feedback": show_feedback,
         "response_type": "text",  # Can be text, card, list, etc.
         "quick_actions": get_mobile_quick_actions(response),  # Quick action buttons for mobile
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
+        "session_id": session_id,
+        "message_id": assistant_message_id  # Add message_id for feedback tracking
     }
 
 
 @app.post("/api/feedback")
 async def feedback(request: FeedbackRequest):
-    if request.feedback == "no":
-        # Don't create ticket anymore, just provide contact info
-        response = """Contact Us:
-support@novarsistech.com"""
-        session_state["resolved_count"] -= 1
+    """Save user feedback for a specific message"""
+    if db and db.is_connected():
+        try:
+            # Save feedback to MongoDB
+            success = db.save_feedback(
+                session_id=request.session_id,
+                message_id=request.message_id,
+                feedback_type=request.feedback
+            )
+
+            if success:
+                # Return success response
+                return {"status": "success", "message": "Feedback saved successfully"}
+            else:
+                return {"status": "error", "message": "Failed to save feedback"}
+        except Exception as e:
+            logger.error(f"Error saving feedback: {str(e)}")
+            return {"status": "error", "message": f"Error: {str(e)}"}
     else:
-        if session_state.get("platform") == "mobile":
-            response = "Great! Happy to help! 😊"
-        else:
-            response = "Great! I'm glad I could help. Feel free to ask if you have any more questions about Novarsis! 🚀"
-        session_state["resolved_count"] += 1
-
-    bot_message = {
-        "role": "assistant",
-        "content": response,
-        "timestamp": datetime.now(),
-        "show_feedback": True  # Changed to True
-    }
-    session_state["chat_history"].append(bot_message)
-
-    return {"response": response}
+        return {"status": "error", "message": "Database not connected"}
 
 
 @app.post("/api/upload")
@@ -2553,7 +2283,7 @@ async def mobile_chat(request: ChatRequest):
         "status": "success",
         "data": {
             "message": response["response"],
-            "message_id": f"msg_{datetime.now().timestamp()}",
+            "message_id": response.get("message_id"),
             "timestamp": response["timestamp"],
             "type": response["response_type"],
             "quick_actions": response.get("quick_actions", []),
@@ -2561,7 +2291,7 @@ async def mobile_chat(request: ChatRequest):
             "metadata": {
                 "show_feedback": response["show_feedback"],
                 "requires_action": bool(response.get("quick_actions")),
-                "session_id": session_state.get("session_id", "default")
+                "session_id": response.get("session_id", "default")
             }
         }
     }
@@ -3137,24 +2867,56 @@ with open("templates/index.html", "w") as f:
 
         .feedback-container {
             display: flex;
-            gap: 10px;
-            margin-top: 10px;
-            margin-left: 64px;
+            justify-content: flex-start;
+            gap: 8px;
+            margin-top: 8px;
+            margin-left: 0;
         }
 
         .feedback-btn {
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 12px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
             border: 1px solid #e0e0e0;
             background: white;
             cursor: pointer;
             transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            flex-shrink: 0;
         }
 
         .feedback-btn:hover {
-            background: #f8f9fa;
-            border-color: #667eea;
+            transform: scale(1.1);
+        }
+
+        .feedback-btn.positive {
+            color: #4caf50;
+            border-color: #4caf50;
+        }
+
+        .feedback-btn.negative {
+            color: #f44336;
+            border-color: #f44336;
+        }
+
+        .feedback-btn.selected.positive {
+            background: #4caf50;
+            border-color: #4caf50;
+            color: white;
+        }
+
+        .feedback-btn.selected.negative {
+            background: #f44336;
+            border-color: #f44336;
+            color: white;
+        }
+
+        .feedback-btn svg {
+            width: 14px;
+            height: 14px;
         }
 
         .file-input {
@@ -3412,10 +3174,18 @@ with open("templates/index.html", "w") as f:
             }
         });
 
+        // Session tracking
+        let currentSessionId = null;
+
         // Add message to chat
-        function addMessage(role, content, showFeedback = true) {
+        function addMessage(role, content, showFeedback = true, messageId = null) {
             const messageWrapper = document.createElement('div');
             messageWrapper.className = `message-wrapper ${role}-message-wrapper`;
+
+            // Store message ID for feedback tracking
+            if (messageId) {
+                messageWrapper.dataset.messageId = messageId;
+            }
 
             const avatar = document.createElement('div');
             avatar.className = `avatar ${role}-avatar`;
@@ -3436,13 +3206,90 @@ with open("templates/index.html", "w") as f:
                 messageWrapper.appendChild(messageContent);
                 messageWrapper.appendChild(avatar);
             } else {
+                // For bot messages, create a container for message and feedback
+                const botContainer = document.createElement('div');
+                botContainer.style.display = 'flex';
+                botContainer.style.flexDirection = 'column';
+                botContainer.appendChild(messageContent);
+
+                // Add feedback buttons if showFeedback is true
+                if (showFeedback) {
+                    const feedbackContainer = document.createElement('div');
+                    feedbackContainer.className = 'feedback-container';
+
+                    const positiveBtn = document.createElement('button');
+                    positiveBtn.className = 'feedback-btn positive';
+                    positiveBtn.innerHTML = `
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" fill="currentColor"/>
+                        </svg>
+                    `;
+
+                    const negativeBtn = document.createElement('button');
+                    negativeBtn.className = 'feedback-btn negative';
+                    negativeBtn.innerHTML = `
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 13.41 12z" fill="currentColor"/>
+                        </svg>
+                    `;
+
+                    // Add click handlers for feedback buttons
+                    positiveBtn.addEventListener('click', function() {
+                        handleFeedback(messageId, 'helpful', positiveBtn, negativeBtn);
+                    });
+
+                    negativeBtn.addEventListener('click', function() {
+                        handleFeedback(messageId, 'not_helpful', positiveBtn, negativeBtn);
+                    });
+
+                    feedbackContainer.appendChild(positiveBtn);
+                    feedbackContainer.appendChild(negativeBtn);
+                    botContainer.appendChild(feedbackContainer);
+                }
+
                 messageWrapper.appendChild(avatar);
-                messageWrapper.appendChild(messageContent);
-                // Feedback buttons removed: assistant messages now only show avatar and content.
+                messageWrapper.appendChild(botContainer);
             }
 
             chatContainer.appendChild(messageWrapper);
             chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // Handle feedback submission
+        function handleFeedback(messageId, feedbackType, positiveBtn, negativeBtn) {
+            if (!messageId || !currentSessionId) {
+                console.error('Missing message ID or session ID for feedback');
+                return;
+            }
+
+            // Update button states
+            if (feedbackType === 'helpful') {
+                positiveBtn.classList.add('selected');
+                negativeBtn.classList.remove('selected');
+            } else {
+                negativeBtn.classList.add('selected');
+                positiveBtn.classList.remove('selected');
+            }
+
+            // Send feedback to backend
+            fetch('/api/feedback', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    session_id: currentSessionId,
+                    message_id: messageId,
+                    feedback: feedbackType
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Feedback response:', data);
+            })
+            .catch(error => {
+                console.error('Error sending feedback:', error);
+            });
         }
 
         // Show typing indicator
@@ -3616,7 +3463,7 @@ with open("templates/index.html", "w") as f:
 
             // Normal message handling
             // Add user message
-            addMessage('user', message);
+            addMessage('user', message, false);
 
             // Clear suggestions after sending
             updateSuggestions([]);
@@ -3633,17 +3480,23 @@ with open("templates/index.html", "w") as f:
                     },
                     body: JSON.stringify({
                         message: message,
-                        image_data: imageData
+                        image_data: imageData,
+                        session_id: currentSessionId
                     })
                 });
 
                 const data = await response.json();
 
+                // Store session ID for future feedback
+                if (data.session_id) {
+                    currentSessionId = data.session_id;
+                }
+
                 // Remove typing indicator
                 typingIndicator.remove();
 
-                // Add bot response
-                addMessage('assistant', data.response, data.show_feedback);
+                // Add bot response with message ID for feedback
+                addMessage('assistant', data.response, data.show_feedback, data.message_id);
 
                 // Load initial suggestions after response
                 setTimeout(() => {
@@ -3671,30 +3524,6 @@ with open("templates/index.html", "w") as f:
                 setTimeout(() => {
                     loadInitialSuggestions();
                 }, 500);
-            }
-        }
-
-        // Send feedback
-        async function sendFeedback(feedback) {
-            const messageIndex = document.querySelectorAll('.message-wrapper').length - 1;
-
-            try {
-                const response = await fetch('/api/feedback', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        feedback: feedback,
-                        message_index: message_index
-                    })
-                });
-
-                const data = await response.json();
-                addMessage('assistant', data.response, true);
-
-            } catch (error) {
-                console.error('Error sending feedback:', error);
             }
         }
 
