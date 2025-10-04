@@ -47,15 +47,13 @@ class ChatDatabase:
         self.db = None
 
         try:
-            # Get connection string from environment
-            connection_string = os.getenv('MONGODB_URL')
+            # HARDCODED MongoDB connection string - No .env needed!
+            connection_string = "mongodb+srv://gurudattamanpreet:gurudattamanpreet@novarsischatbot.pd2nd6d.mongodb.net/?retryWrites=true&w=majority&appName=NovarsisChatbot"
+
+            # Direct connection - no environment variables needed
             if not connection_string:
-                # Try alternative environment variable names (Render might use different names)
-                connection_string = os.getenv('MONGODB_URI') or os.getenv('DATABASE_URL')
-                if not connection_string:
-                    logger.warning("MongoDB connection string not found. Running without database.")
-                    logger.info("Set MONGODB_URL in Render environment variables.")
-                    return
+                logger.warning("MongoDB connection string not found.")
+                return
 
             # Log connection attempt (without showing password)
             safe_url = connection_string.split('@')[1] if '@' in connection_string else 'connection_string'
@@ -311,7 +309,7 @@ class ChatDatabase:
                 "helpful_feedback": helpful_count,
                 "not_helpful_feedback": not_helpful_count,
                 "satisfaction_rate": (helpful_count / (helpful_count + not_helpful_count) * 100) if (
-                                                                                                                helpful_count + not_helpful_count) > 0 else 0
+                                                                                                            helpful_count + not_helpful_count) > 0 else 0
             }
 
             return stats
@@ -365,21 +363,46 @@ def cleanup_mongodb():
 atexit.register(cleanup_mongodb)
 # ================== MONGODB INTEGRATION END ==================
 
-# Configure Ollama API - UPDATED FOR HOSTED SERVICE
-OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY",
-                           "14bfe5365cc246dc82d933e3af2aa5b6.hz2asqgJi2bO_gpN7Cp1Hcku")  # Empty default, will be set via environment
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "https://ollama.com")  # Default to hosted service
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "codellama:13b")  # Default model
-USE_HOSTED_OLLAMA = True  # Always use hosted service
+# ================== OLLAMA API CONFIGURATION ==================
+# SIMPLE MODEL SWITCHING - Just change the model name here!
 
-# Initialize Ollama model
+# CHANGE THIS TO USE DIFFERENT MODELS
+OLLAMA_MODEL = "qwen3-coder:480b"  # <-- Just change this model name
+# Available models:
+# - "gpt-oss:latest"     (14GB) - Latest GPT-OSS model
+# - "gpt-oss:20b"        (14GB) - 20B parameter model
+# - "gpt-oss:120b"       (65GB) - 120B parameter model (larger/better)
+# - "llama4:latest"      (67GB) - Meta's Llama 4 model (supports images too!)
+# - "llama4:16x17b"      (67GB) - 16x17B Llama 4 model
+# - "llama4:128x17b"     (245GB) - Largest Llama 4 model
+# - Any other Ollama model from https://ollama.com/library
+
+# API Configuration
+OLLAMA_API_KEY = "14bfe5365cc246dc82d933e3af2aa5b6.hz2asqgJi2bO_gpN7Cp1Hcku"  # Your API key (hardcoded)
+OLLAMA_BASE_URL = "https://ollama.com"  # Using Ollama API endpoint  
+USE_HOSTED_OLLAMA = True  # Always use hosted service - no local ollama needed
+
+# You can also use environment variables if you prefer:
+# OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'gpt-oss:120b')
+# OLLAMA_API_KEY = os.getenv('OLLAMA_API_KEY', '14bfe5365cc246dc82d933e3af2aa5b6.hz2asqgJi2bO_gpN7Cp1Hcku')
+
+# Initialize and display model configuration
 model = True  # We'll assume it's available and handle errors in the API call
+
+# Display model configuration on startup
+logger.info("=" * 50)
+logger.info("🚀 OLLAMA API CONFIGURATION")
+logger.info(f"📦 Model: {OLLAMA_MODEL}")
+logger.info(f"🌐 Endpoint: {OLLAMA_BASE_URL}")
+logger.info(f"🔑 API Key: {OLLAMA_API_KEY[:10]}...{OLLAMA_API_KEY[-4:]}")  # Show partial key for security
+logger.info(f"☁️  Using Hosted Service: {USE_HOSTED_OLLAMA}")
+logger.info("=" * 50)
 
 # Initialize embedding model - Ollama doesn't have a direct embedding API like Gemini
 # So we'll use keyword-based filtering only
 reference_embedding = None
 embedding_model = None
-logger.info("Using keyword-based filtering (Ollama doesn't provide embedding API)")
+logger.info("📝 Using keyword-based filtering (Ollama embedding not used)")
 
 # Constants
 WHATSAPP_NUMBER = "+91-9999999999"
@@ -1029,99 +1052,89 @@ def get_intro_response() -> str:
 
 
 def call_ollama_api(prompt: str, image_data: Optional[str] = None) -> str:
-    """Call Ollama API with the prompt - supports both local and hosted Ollama with image analysis"""
+    """Call Ollama API with the selected model"""
+    
     try:
-        # Check if using hosted service with API key
-        if OLLAMA_API_KEY and USE_HOSTED_OLLAMA:
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {OLLAMA_API_KEY}"
-            }
+        # Set up headers for Ollama API
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {OLLAMA_API_KEY}"
+        }
+
+        # Prepare the message based on whether image is included
+        if image_data:
+            # For vision-capable models like llama4 with images
+            messages = [{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}}
+                ]
+            }]
         else:
-            # Local Ollama doesn't need auth
-            headers = {
-                "Content-Type": "application/json"
-            }
+            messages = [{"role": "user", "content": prompt}]
 
-        # Try different API formats based on service type
-        if USE_HOSTED_OLLAMA:
-            # For hosted service with image data
-            if image_data:
-                # Include image in the message for vision-capable models
-                messages = [{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}}
-                    ]
-                }]
-            else:
-                messages = [{"role": "user", "content": prompt}]
+        # Prepare request data
+        data = {
+            "model": OLLAMA_MODEL,
+            "messages": messages,
+            "stream": False,
+            "temperature": 0.7,
+            "max_tokens": 500  # Limit response for faster processing
+        }
 
-            data = {
-                "model": OLLAMA_MODEL,
-                "messages": messages,
-                "stream": False,
-                "temperature": 0.3
-            }
-            endpoint = f"{OLLAMA_BASE_URL}/v1/chat/completions"  # OpenAI compatible endpoint
-        else:
-            # Local Ollama format
-            data = {
-                "model": OLLAMA_MODEL,
-                "prompt": prompt,
-                "stream": False
-            }
-            endpoint = f"{OLLAMA_BASE_URL}/api/generate"
+        logger.info(f"=== Ollama API Call ===")
+        logger.info(f"Endpoint: {OLLAMA_BASE_URL}/v1/chat/completions")
+        logger.info(f"Model: {OLLAMA_MODEL}")
+        logger.info(f"Image included: {bool(image_data)}")
 
-        # If there's image data for local Ollama, include it
-        if image_data and not USE_HOSTED_OLLAMA:
-            data["images"] = [image_data]
-
-        logger.info(f"Calling Ollama API at: {endpoint}")
-
-        # Make the API call with increased timeout
+        # Make the API call
         response = requests.post(
-            endpoint,
+            f"{OLLAMA_BASE_URL}/v1/chat/completions",  # OpenAI-compatible endpoint
             headers=headers,
             json=data,
-            timeout=60  # 60 seconds timeout
+            timeout=60  # 60 second timeout
         )
 
-        logger.info(f"Ollama response status: {response.status_code}")
+        logger.info(f"Response status: {response.status_code}")
 
         if response.status_code == 200:
             result = response.json()
+            logger.info("✅ Response received successfully")
 
-            # Different response formats for local vs hosted
-            if USE_HOSTED_OLLAMA:
-                # OpenAI compatible format
-                if "choices" in result and len(result["choices"]) > 0:
-                    return result["choices"][0].get("message", {}).get("content", "No response generated.")
-                else:
-                    return result.get("response", "No response generated.")
+            # Parse the OpenAI-format response
+            if "choices" in result and len(result["choices"]) > 0:
+                return result["choices"][0].get("message", {}).get("content", "No response generated.")
             else:
-                # Local Ollama format
-                return result.get("response", "I couldn't generate a response. Please try again.")
+                logger.error(f"Unexpected response format: {result}")
+                return "Response format unexpected. Please try again."
+                
+        elif response.status_code == 404:
+            logger.error(f"Model '{OLLAMA_MODEL}' not found")
+            return f"Model '{OLLAMA_MODEL}' not available. Try changing to 'gpt-oss:latest' or 'llama4:latest' in the configuration."
         else:
-            # Handle specific error codes
-            if response.status_code == 401:
-                return "Authentication error: Invalid API key. Please check your Ollama API key."
-            elif response.status_code == 404:
-                return f"Model not found: The model '{OLLAMA_MODEL}' is not available. Please check the model name."
-            else:
-                logger.error(f"Ollama API error: {response.status_code} - {response.text}")
-                return f"API Error ({response.status_code}). Please check if the service is available."
+            # Handle error codes
+            error_messages = {
+                401: "API key invalid. Please check configuration.",
+                429: "Rate limit exceeded. Please wait and retry.",
+                500: "Server error. Service temporarily unavailable.",
+                503: "Service unavailable. Please try again later."
+            }
+            
+            return error_messages.get(
+                response.status_code, 
+                f"API Error ({response.status_code}). Please try again."
+            )
 
     except requests.exceptions.ConnectionError as e:
-        logger.error(f"Cannot connect to Ollama: {e}")
-        return f"Cannot connect to Ollama at {OLLAMA_BASE_URL}. Please check your internet connection and the service URL."
+        logger.error(f"Cannot connect to API: {e}")
+        return "I'm having trouble connecting to the AI service right now. Please try again in a moment."
     except requests.exceptions.Timeout:
-        logger.error("Ollama API timeout")
-        return "Response timeout. The service is taking too long to respond. Please try a simpler query."
+        logger.error("API timeout")
+        return "Response timeout. The service is taking too long. Please try again with a simpler query."
     except Exception as e:
-        logger.error(f"Ollama API error: {str(e)}")
-        return f"Error: {str(e)}. Please check the logs for details."
+        logger.error(f"API error: {str(e)}")
+        return "I'm experiencing a temporary issue. Please try your question again, or for immediate assistance, contact us at support@novarsistech.com"
 
 
 def remove_duplicate_pricing(text: str) -> str:
@@ -1722,16 +1735,42 @@ def get_ai_response(user_input: str, image_data: Optional[str] = None, chat_hist
 
         # Special handling for image attachments
         if image_data:
-            # Check if the message is SEO-related or general error query
-            seo_image_keywords = ['error', 'seo', 'issue', 'problem', 'bug', 'fix', 'help', 'analyze', 'screenshot',
-                                  'tool', 'novarsis']
-            is_seo_related_image = any(keyword in user_input.lower() for keyword in seo_image_keywords)
+            # Check if this is likely an SEO-related screenshot
+            seo_keywords = ['error', 'seo', 'issue', 'problem', 'fix', 'help', 'analyze', 'tool', 'novarsis', 'website',
+                            'meta', 'tag', 'speed', 'mobile']
 
-            # If no context provided or it's clearly not SEO-related, filter it
-            if not is_seo_related_image and not any(keyword in user_input.lower() for keyword in NOVARSIS_KEYWORDS):
-                return """Sorry, I only help with the Novarsis SEO Tool.
+            # If user hasn't provided context, check if it might be SEO-related
+            if not user_input or user_input.strip() == "":
+                user_input = "Please analyze this screenshot."
+            elif len(user_input.strip()) < 20:
+                # If message is too short, check if it contains SEO keywords
+                if not any(keyword in user_input.lower() for keyword in seo_keywords):
+                    # Could be non-SEO screenshot, let the AI determine
+                    user_input = f"{user_input}. Please analyze this screenshot."
+                else:
+                    # Likely SEO-related, enhance the message
+                    user_input = f"{user_input}. This screenshot shows SEO-related issues. Please help me understand and fix them."
 
-Please let me know if you have any SEO-related questions?"""
+        # Add mobile context to session if mobile
+        if session_state.get("platform") == "mobile":
+            session_state["platform"] = "mobile"
+        # Check if the user is responding to "Have I resolved your query?"
+        if session_state.get("last_bot_message_ends_with_query_solved"):
+            if user_input.lower() in ["no", "nope", "not really", "not yet"]:
+                # User says no, so we provide contact information
+                session_state["last_bot_message_ends_with_query_solved"] = False
+                return """Contact Us:
+support@novarsistech.com"""
+            elif user_input.lower() in ["yes", "yeah", "yep", "thank you", "thanks"]:
+                # User says yes, we can acknowledge
+                session_state["last_bot_message_ends_with_query_solved"] = False
+                return "Great! I'm glad I could help. Feel free to ask if you have any more questions about Novarsis! 🚀"
+
+        # Check if the message is an email
+        if re.match(r"[^@]+@[^@]+\.[^@]+", user_input):
+            # It's an email, so we acknowledge and continue
+            # We don't want to restart the chat, so we just pass it to the AI
+            pass  # We'll let the AI handle it as per the system prompt
 
         # Only filter if MCP says we should
         elif should_filter and not is_novarsis_related(user_input):
@@ -1971,13 +2010,11 @@ Have I resolved your query?"""
         response_text = re.sub(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+)\.Com\b', r'\1.com', response_text)
 
         # Fix user emails that got corrupted (e.g., "gbgbnd@gmail. Com" -> "gbgbnd@gmail.com")
-        response_text = re.sub(r'@([a-zA-Z0-9.-]+)\s+\.\s*([Cc][Oo][Mm]|[Cc]om)', r'@\1.com', response_text)
-        response_text = re.sub(r'@([a-zA-Z0-9.-]+)\s+\.\s*([Nn][Ee][Tt]|[Nn]et)', r'@\1.net', response_text)
-        response_text = re.sub(r'@([a-zA-Z0-9.-]+)\s+\.\s*([Oo][Rr][Gg]|[Oo]rg)', r'@\1.org', response_text)
-        response_text = re.sub(r'@([a-zA-Z0-9.-]+)\s+\.\s*([Cc][Oo]\.in)', r'@\1.co.in', response_text)
+        response_text = re.sub(r'@([a-zA-Z0-9.-]+)\s+\.\s*([Cc][Oo][Mm]|[Cc]om|[Nn]et|[Oo]rg|[Ii]n|[Ii]o)', r'@\1.\2',
+                               response_text)
 
         # Fix support@ duplication EARLY - Multiple patterns to catch all variations
-        response_text = re.sub(r'support@support@novarsistech', 'support@novarsistech', response_text,
+        response_text = re.sub(r'support@support@novarsistech\.com', 'support@novarsistech.com', response_text,
                                flags=re.IGNORECASE)
         response_text = re.sub(r'support@support@', 'support@', response_text, flags=re.IGNORECASE)
         response_text = re.sub(r'email:\s*support@support@', 'email: support@', response_text, flags=re.IGNORECASE)
@@ -2280,6 +2317,50 @@ Enterprise
         # Return a more helpful error message
         return "I'm experiencing a temporary issue. Please try your question again, or for immediate assistance, contact us at support@novarsistech.com"
 
+
+# ================== TEST ENDPOINT FOR OLLAMA ==================
+@app.get("/test-model")
+async def test_model():
+    """Test current Ollama model and show configuration"""
+    return {
+        "status": "ready",
+        "current_model": OLLAMA_MODEL,
+        "api_endpoint": OLLAMA_BASE_URL,
+        "hosted_service": USE_HOSTED_OLLAMA,
+        "test_message": "Model is ready! Send a POST request to /chat with your message.",
+        "available_models": [
+            "gpt-oss:latest",
+            "gpt-oss:20b", 
+            "gpt-oss:120b",
+            "llama4:latest",
+            "llama4:16x17b",
+            "llama4:128x17b"
+        ],
+        "how_to_change": "Just change OLLAMA_MODEL variable in the code to any model name from available_models list"
+    }
+
+@app.post("/test-chat")
+async def test_chat(request: Request):
+    """Quick test endpoint for the model"""
+    try:
+        body = await request.json()
+        test_message = body.get("message", "Hello, can you introduce yourself?")
+        
+        # Call the model
+        response = call_ollama_api(test_message)
+        
+        return {
+            "model_used": OLLAMA_MODEL,
+            "user_message": test_message,
+            "model_response": response,
+            "status": "success"
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "model": OLLAMA_MODEL,
+            "status": "failed"
+        }
 
 # API Routes
 @app.get("/", response_class=HTMLResponse)
@@ -3686,7 +3767,7 @@ with open("templates/index.html", "w") as f:
                     },
                     body: JSON.stringify({
                         feedback: feedback,
-                        message_index: message_index
+                        message_index: messageIndex
                     })
                 });
 
